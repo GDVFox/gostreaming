@@ -6,6 +6,7 @@ import (
 
 	"github.com/GDVFox/gostreaming/meta_node/api/common"
 	"github.com/GDVFox/gostreaming/meta_node/external"
+	"github.com/GDVFox/gostreaming/util/httplib"
 )
 
 // ActionList список имен действий.
@@ -14,17 +15,17 @@ type ActionList struct {
 }
 
 // ListActions получает список названий действий.
-func ListActions(r *http.Request) (*common.Response, error) {
+func ListActions(r *http.Request) (*httplib.Response, error) {
 	actionsNames, err := external.ETCD.LoadActionNames(r.Context())
 	if err != nil {
-		return common.NewInternalErrorResponse(common.NewErrorBody(common.ETCDErrorCode, err.Error())), nil
+		return httplib.NewInternalErrorResponse(httplib.NewErrorBody(common.ETCDErrorCode, err.Error())), nil
 	}
 
 	list := &ActionList{Actions: actionsNames}
 	actionsData, err := json.Marshal(list)
 	if err != nil {
-		return common.NewInternalErrorResponse(common.NewErrorBody(common.BadActionErrorCode, err.Error())), nil
+		return httplib.NewInternalErrorResponse(httplib.NewErrorBody(common.BadActionErrorCode, err.Error())), nil
 	}
 
-	return common.NewOKResponse(actionsData, true), nil
+	return httplib.NewOKResponse(actionsData, true), nil
 }

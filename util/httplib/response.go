@@ -1,4 +1,4 @@
-package common
+package httplib
 
 import (
 	"encoding/json"
@@ -60,28 +60,14 @@ func NewInternalErrorResponse(body []byte) *Response {
 	}
 }
 
-// ErrorCode тип для кодов ошибок
-type ErrorCode string
-
-// Возможные коды ошибок.
-var (
-	BadUnmarshalRequestErrorCode ErrorCode = "bad_unmarshal"
-	BadSchemeErrorCode           ErrorCode = "bad_scheme"
-	BadActionErrorCode           ErrorCode = "bad_action"
-	BadNameErrorCode             ErrorCode = "bad_name"
-	NameNotFoundErrorCode        ErrorCode = "name_not_found"
-	NameAlreadyExistsErrorCode   ErrorCode = "name_already_exists"
-	ETCDErrorCode                ErrorCode = "etcd_error"
-)
-
 // ErrorBody тело ответа, при возникновении ошибки.
 type ErrorBody struct {
-	Code    ErrorCode `json:"code"`
-	Message string    `json:"message"`
+	Code    string `json:"code"`
+	Message string `json:"message"`
 }
 
 // NewErrorBody создает новое тело ответа, содержащего ошибку
-func NewErrorBody(c ErrorCode, msg string) []byte {
+func NewErrorBody(c string, msg string) []byte {
 	errBody := &ErrorBody{
 		Code:    c,
 		Message: msg,

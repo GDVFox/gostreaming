@@ -3,26 +3,29 @@ package actions
 import (
 	"net/http"
 
-	"github.com/GDVFox/gostreaming/meta_node/api/common"
-	"github.com/GDVFox/gostreaming/meta_node/external"
 	"github.com/gorilla/mux"
 	"github.com/pkg/errors"
+
+	"github.com/GDVFox/gostreaming/meta_node/api/common"
+	"github.com/GDVFox/gostreaming/meta_node/external"
+	"github.com/GDVFox/gostreaming/util/httplib"
+	"github.com/GDVFox/gostreaming/util/storage"
 )
 
 // DeleteAction удаляем действие, если оно существует.
-func DeleteAction(r *http.Request) (*common.Response, error) {
+func DeleteAction(r *http.Request) (*httplib.Response, error) {
 	vars := mux.Vars(r)
 	actionName := vars["action_name"]
 	if actionName == "" {
-		return common.NewBadRequestResponse(common.NewErrorBody(common.BadNameErrorCode, "action_name must be not empty")), nil
+		return httplib.NewBadRequestResponse(httplib.NewErrorBody(common.BadNameErrorCode, "action_name must be not empty")), nil
 	}
 
 	if err := external.ETCD.DeleteAction(r.Context(), actionName); err != nil {
-		if errors.Cause(err) == external.ErrNotFound {
-			return common.NewNotFoundResponse(common.NewErrorBody(common.NameNotFoundErrorCode, err.Error())), nil
+		if errors.Cause(err) == storage.ErrNotFound {
+			return httplib.NewNotFoundResponse(httplib.NewErrorBody(common.NameNotFoundErrorCode, err.Error())), nil
 		}
-		return common.NewInternalErrorResponse(common.NewErrorBody(common.ETCDErrorCode, err.Error())), nil
+		return httplib.NewInternalErrorResponse(httplib.NewErrorBody(common.ETCDErrorCode, err.Error())), nil
 	}
 
-	return common.NewOKResponse(nil, false), nil
+	return httplib.NewOKResponse(nil, false), nil
 }

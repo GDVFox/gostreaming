@@ -40,7 +40,7 @@ func NewLogger(cfg *LoggingConfig) (*Logger, error) {
 	if cfg.Logfile == "stdout" {
 		f = os.Stdout
 	} else {
-		f, err = os.Open(cfg.Logfile)
+		f, err = os.OpenFile(cfg.Logfile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0660)
 		if err != nil {
 			return nil, errors.Wrap(err, "can not open logfile")
 		}

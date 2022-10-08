@@ -1,4 +1,4 @@
-package common
+package httplib
 
 import (
 	"context"
@@ -26,7 +26,7 @@ type Handler func(r *http.Request) (*Response, error)
 func CreateHandler(h Handler, l *util.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token := uuid.New()
-		logger := l.With(zap.String("request_id", token.String()))
+		logger := &util.Logger{SugaredLogger: l.With(zap.String("request_id", token.String()))}
 		logger.Infof("got request %s, %s", r.Method, r.URL)
 
 		ctx := context.WithValue(r.Context(), RequestLogger, logger)

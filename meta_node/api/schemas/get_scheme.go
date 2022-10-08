@@ -9,28 +9,30 @@ import (
 
 	"github.com/GDVFox/gostreaming/meta_node/api/common"
 	"github.com/GDVFox/gostreaming/meta_node/external"
+	"github.com/GDVFox/gostreaming/util/httplib"
+	"github.com/GDVFox/gostreaming/util/storage"
 )
 
 // GetScheme получает описание схемы.
-func GetScheme(r *http.Request) (*common.Response, error) {
+func GetScheme(r *http.Request) (*httplib.Response, error) {
 	vars := mux.Vars(r)
 	schemeName := vars["scheme_name"]
 	if schemeName == "" {
-		return common.NewBadRequestResponse(common.NewErrorBody(common.BadNameErrorCode, "scheme_name must be not empty")), nil
+		return httplib.NewBadRequestResponse(httplib.NewErrorBody(common.BadNameErrorCode, "scheme_name must be not empty")), nil
 	}
 
 	plan, err := external.ETCD.LoadPlan(r.Context(), schemeName)
 	if err != nil {
-		if errors.Cause(err) == external.ErrNotFound {
-			return common.NewNotFoundResponse(common.NewErrorBody(common.NameNotFoundErrorCode, err.Error())), nil
+		if errors.Cause(err) == storage.ErrNotFound {
+			return httplib.NewNotFoundResponse(httplib.NewErrorBody(common.NameNotFoundErrorCode, err.Error())), nil
 		}
-		return common.NewInternalErrorResponse(common.NewErrorBody(common.ETCDErrorCode, err.Error())), nil
+		return httplib.NewInternalErrorResponse(httplib.NewErrorBody(common.ETCDErrorCode, err.Error())), nil
 	}
 
 	schemeData, err := json.Marshal(plan.Scheme)
 	if err != nil {
-		return common.NewInternalErrorResponse(common.NewErrorBody(common.BadSchemeErrorCode, err.Error())), nil
+		return httplib.NewInternalErrorResponse(httplib.NewErrorBody(common.BadSchemeErrorCode, err.Error())), nil
 	}
 
-	return common.NewOKResponse(schemeData, true), nil
+	return httplib.NewOKResponse(schemeData, true), nil
 }
