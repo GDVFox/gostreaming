@@ -9,6 +9,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	go.etcd.io/etcd/client/v3 v3.5.6
 	go.uber.org/zap v1.17.0
+	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	gopkg.in/yaml.v3 v3.0.1
 )
 
