@@ -2,6 +2,8 @@ package config
 
 import (
 	"strings"
+
+	"github.com/GDVFox/gostreaming/util"
 )
 
 // Conf синглтон конфигурации
@@ -9,11 +11,14 @@ var Conf = &Config{}
 
 // Config конфигурация для запуска runtime
 type Config struct {
-	ActionPath string
-	Replicas   int
-	Port       int
-	InRaw      string
-	OutRaw     string
+	Logger util.LoggingConfig
+
+	ActionPath  string
+	Replicas    int
+	Port        int
+	ServiceSock string
+	InRaw       string
+	OutRaw      string
 
 	In  []string
 	Out []string

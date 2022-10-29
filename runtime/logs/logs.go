@@ -6,8 +6,9 @@ import "github.com/GDVFox/gostreaming/util"
 var Logger *util.Logger
 
 // InitLogger инициализирует синлтон-объект для логирования.
-func InitLogger() error {
+func InitLogger(cfg *util.LoggingConfig) error {
 	var err error
-	Logger, err = util.NewLogger(&util.LoggingConfig{Logfile: "stdout", Level: "debug"})
+	cfg.TruncateFile = true // всегда чистим файлы в runtime.
+	Logger, err = util.NewLogger(cfg)
 	return err
 }

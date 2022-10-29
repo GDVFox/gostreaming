@@ -54,7 +54,7 @@ func (c *TCPClient) Run(ctx context.Context) error {
 }
 
 func (c *TCPClient) transmitingLoop(ctx context.Context, conn *connection) error {
-	errs := make(chan error)
+	errs := make(chan error, 1)
 	go func() {
 		for {
 			// Если отключение будет тут,

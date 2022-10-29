@@ -10,15 +10,17 @@ import (
 
 // LoggingConfig параметры логирования
 type LoggingConfig struct {
-	Logfile string `yaml:"logfile"`
-	Level   string `yaml:"level"`
+	Logfile      string `yaml:"logfile"`
+	Level        string `yaml:"level"`
+	TruncateFile bool   `yaml:"truncate-file"`
 }
 
 // NewLoggingConfig создает LoggingConfig с настройками по-умолчанию.
 func NewLoggingConfig() *LoggingConfig {
 	return &LoggingConfig{
-		Logfile: "stdout",
-		Level:   "info",
+		Logfile:      "stdout",
+		Level:        "info",
+		TruncateFile: false,
 	}
 }
 
@@ -40,7 +42,11 @@ func NewLogger(cfg *LoggingConfig) (*Logger, error) {
 	if cfg.Logfile == "stdout" {
 		f = os.Stdout
 	} else {
-		f, err = os.OpenFile(cfg.Logfile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0660)
+		flags := os.O_RDWR | os.O_CREATE | os.O_APPEND
+		if cfg.TruncateFile {
+			flags |= os.O_TRUNC
+		}
+		f, err = os.OpenFile(cfg.Logfile, flags, 0660)
 		if err != nil {
 			return nil, errors.Wrap(err, "can not open logfile")
 		}

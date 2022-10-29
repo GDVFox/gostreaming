@@ -2,6 +2,7 @@ package external
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -101,7 +102,7 @@ func (s *TCPServer) acceptConnections(conns chan<- *connection) error {
 }
 
 func (s *TCPServer) receiveLoop(ctx context.Context, conn *connection) error {
-	errs := make(chan error)
+	errs := make(chan error, 1)
 
 	go func() {
 		for {
@@ -118,7 +119,7 @@ func (s *TCPServer) receiveLoop(ctx context.Context, conn *connection) error {
 			if err := m.readIn(conn); err != nil {
 				messages.Put(m)
 
-				if err == io.EOF {
+				if errors.Unwrap(err) == io.EOF {
 					errs <- nil
 					return
 				}
