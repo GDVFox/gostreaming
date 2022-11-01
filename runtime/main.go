@@ -88,4 +88,5 @@ func main() {
 		fmt.Fprintf(os.Stderr, "action run error: %v\n", err)
 		os.Exit(1)
 	}
+	logs.Logger.Infof("runtime started for action %s stopped.", config.Conf.ActionPath)
 }

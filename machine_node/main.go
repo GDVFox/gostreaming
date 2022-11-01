@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"github.com/GDVFox/gostreaming/machine_node/api"
 	"github.com/GDVFox/gostreaming/machine_node/config"
 	"github.com/GDVFox/gostreaming/machine_node/external"
+	"github.com/GDVFox/gostreaming/machine_node/watcher"
 	"github.com/GDVFox/gostreaming/util"
 	"github.com/GDVFox/gostreaming/util/httplib"
 	"github.com/gorilla/mux"
@@ -47,10 +49,16 @@ func main() {
 		return
 	}
 
+	watcherContext, watcherCancel := context.WithCancel(context.Background())
+	if err := watcher.StartWatcher(watcherContext, logger, config.Conf.Watcher); err != nil {
+		logger.Fatalf("can not init external resources: %v", err)
+		return
+	}
+
 	r := mux.NewRouter().PathPrefix("/v1").Subrouter()
 
 	r.HandleFunc("/run", httplib.CreateHandler(api.RunAction, logger)).Methods(http.MethodPost)
-	r.HandleFunc("/stop", nil).Methods(http.MethodPost)
+	r.HandleFunc("/stop", httplib.CreateHandler(api.StopAction, logger)).Methods(http.MethodPost)
 
 	signalChannel := make(chan os.Signal, 1)
 	signal.Notify(signalChannel, syscall.SIGINT, syscall.SIGTERM)
@@ -58,6 +66,8 @@ func main() {
 	stopChannel := make(chan struct{})
 	go func() {
 		defer close(stopChannel)
+		defer watcherCancel()
+
 		sig := <-signalChannel
 		logger.Info("got signal: ", sig)
 	}()

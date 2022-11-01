@@ -66,23 +66,40 @@ func (a *Action) Run(ctx context.Context) error {
 	atomic.StoreUint32(&a.isRunning, 1)
 	defer atomic.StoreUint32(&a.isRunning, 0)
 
+	// Запускаем команду асинхронно, так как используем StdoutPipe, StderrPipe.
+	// Когда команда завершиться, то StdoutPipe, StderrPipe будут закрыты автоматически.
+	// https://golang.org/pkg/os/exec/#Cmd.StdoutPipe
+	if err := runActionCommand.Start(); err != nil {
+		return fmt.Errorf("can not start action: %w", err)
+	}
+	logs.Logger.Infof("action: %s started", a.path)
+
+	// Запускаем обработчики input/output для действия.
 	wg.Go(func() error {
-		// inCmd закроет handleIn, так как он писатель.
+		// inCmd закроет handleIn, так как он писатель и может это делать по
+		// https://golang.org/pkg/os/exec/#Cmd.StdinPipe
 		return a.handleIn(runCtx, inCmd)
 	})
 	wg.Go(func() error {
 		return a.handleOut(runCtx, outCmd)
 	})
-	wg.Go(func() error {
-		// outCmd пишет действие, поэтому оно и закрывает его
-		defer outCmd.Close()
-		return runActionCommand.Run()
-	})
-	logs.Logger.Infof("action: %s started", a.path)
-	// Здесь дождемся, когда каждая горутина завершится,
-	// т.е. будут отправлены последние сообщения,
-	// бинарник будет отключен.
-	return wg.Wait()
+	if err := wg.Wait(); err != nil {
+		return fmt.Errorf("action io got error: %w", err)
+	}
+
+	// Если input/output завершился, то ждем окончания работы действия.
+	if err := runActionCommand.Wait(); err != nil {
+		exitErr, ok := err.(*exec.ExitError)
+		if !ok {
+			return err
+		}
+		if exitErr.Success() || exitErr.ExitCode() == -1 {
+			return nil
+		}
+		return exitErr
+	}
+
+	return nil
 }
 
 // IsRunning возвращает true, если действие сейчас работает и false иначе.

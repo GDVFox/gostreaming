@@ -25,6 +25,7 @@ var (
 var (
 	runHTTPScheme = "http"
 	runPath       = "/v1/run"
+	stopPath      = "/v1/stop"
 )
 
 // MachineClinets абстракция для обращения к машинам.
@@ -45,8 +46,8 @@ func NewMachineClinets(cfg []*config.Machine) (*MachineClinets, error) {
 	return &MachineClinets{hosts: hosts}, nil
 }
 
-// SendRunAction отправляет запрос
-func (m *MachineClinets) SendRunAction(ctx context.Context, node *planner.NodePlan) error {
+// SendRunAction отправляет запрос для запуска действия на машине.
+func (m *MachineClinets) SendRunAction(ctx context.Context, schemeName string, node *planner.NodePlan) error {
 	port, ok := m.hosts[node.Host]
 	if !ok {
 		return ErrNoHost
@@ -58,19 +59,43 @@ func (m *MachineClinets) SendRunAction(ctx context.Context, node *planner.NodePl
 		Path:   runPath,
 	}
 	reqBody := &message.RunActionRequest{
-		Name:     node.Name,
-		Action:   node.Action,
-		Port:     node.Port,
-		Replicas: node.Replicas,
-		In:       node.In,
-		Out:      node.Out,
+		SchemeName: schemeName,
+		ActionName: node.Name,
+		Action:     node.Action,
+		Port:       node.Port,
+		Replicas:   node.Replicas,
+		In:         node.In,
+		Out:        node.Out,
 	}
-	reqBodyEncoded, err := json.Marshal(reqBody)
+	return m.sendCommand(machineURL.String(), reqBody)
+}
+
+// SendStopAction отправляет запрос для остановки действия на машине.
+func (m *MachineClinets) SendStopAction(ctx context.Context, schemeName string, node *planner.NodePlan) error {
+	port, ok := m.hosts[node.Host]
+	if !ok {
+		return ErrNoHost
+	}
+
+	machineURL := &url.URL{
+		Scheme: runHTTPScheme,
+		Host:   node.Host + ":" + strconv.Itoa(port),
+		Path:   stopPath,
+	}
+	reqBody := &message.StopActionRequest{
+		SchemeName: schemeName,
+		ActionName: node.Name,
+	}
+	return m.sendCommand(machineURL.String(), reqBody)
+}
+
+func (m *MachineClinets) sendCommand(url string, cmd interface{}) error {
+	reqBodyEncoded, err := json.Marshal(cmd)
 	if err != nil {
 		return err
 	}
 
-	resp, err := http.Post(machineURL.String(), "application/json", bytes.NewReader(reqBodyEncoded))
+	resp, err := http.Post(url, "application/json", bytes.NewReader(reqBodyEncoded))
 	if err != nil {
 		return errors.Wrap(ErrMachineError, err.Error())
 	}

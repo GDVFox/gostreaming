@@ -14,8 +14,10 @@ COPY go.mod go.sum ./
 RUN go mod download
 COPY util ./util
 COPY machine_node ./machine_node
+COPY runtime ./runtime
 
 #create binary
+RUN go build -o ./bin/runtime ./runtime/*.go
 RUN go build -o ./bin/machine_node ./machine_node/*.go
 RUN chmod +x ./bin/machine_node
 
