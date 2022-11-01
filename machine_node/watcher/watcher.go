@@ -11,8 +11,8 @@ import (
 
 // Возможные ошибки.
 var (
-	ErrActionAlreadyRegistered = errors.New("action already registered")
-	ErrUnknownAction           = errors.New("unknown action")
+	ErrRuntimeAlreadyRegistered = errors.New("action already registered")
+	ErrUnknownRuntime           = errors.New("unknown action")
 )
 
 // Config набор настроек для Watcher
@@ -29,8 +29,8 @@ func NewConfig() *Config {
 
 // Watcher структура для контроля запущенных действий.
 type Watcher struct {
-	actionsMutex sync.RWMutex
-	actions      map[string]*Action
+	runtimesMutex sync.RWMutex
+	runtimes      map[string]*Runtime
 
 	cfg    *Config
 	logger *util.Logger
@@ -39,38 +39,38 @@ type Watcher struct {
 // NewWatcher создает новый объект watcher
 func newWatcher(l *util.Logger, cfg *Config) *Watcher {
 	return &Watcher{
-		actions: make(map[string]*Action, 0),
-		cfg:     cfg,
-		logger:  l,
+		runtimes: make(map[string]*Runtime, 0),
+		cfg:      cfg,
+		logger:   l,
 	}
 }
 
-// RegisterAction регистрирует действие для наблюдения
-func (w *Watcher) RegisterAction(a *Action) error {
-	w.actionsMutex.Lock()
-	defer w.actionsMutex.Unlock()
+// RegisterRuntime регистрирует действие для наблюдения
+func (w *Watcher) RegisterRuntime(a *Runtime) error {
+	w.runtimesMutex.Lock()
+	defer w.runtimesMutex.Unlock()
 
-	actionName := a.Name()
-	if _, ok := w.actions[actionName]; ok {
-		return ErrActionAlreadyRegistered
+	runtimeName := a.Name()
+	if _, ok := w.runtimes[runtimeName]; ok {
+		return ErrRuntimeAlreadyRegistered
 	}
-	w.actions[actionName] = a
+	w.runtimes[runtimeName] = a
 	return nil
 }
 
-// StopAction остановка действия.
-func (w *Watcher) StopAction(scheme, act string) error {
-	w.actionsMutex.Lock()
-	defer w.actionsMutex.Unlock()
+// StopRuntime остановка действия.
+func (w *Watcher) StopRuntime(schemeName, actionName string) error {
+	w.runtimesMutex.Lock()
+	defer w.runtimesMutex.Unlock()
 
-	actionName := buildActionName(scheme, act)
-	action, ok := w.actions[actionName]
+	runtimeName := buildRuntimeName(schemeName, actionName)
+	runtime, ok := w.runtimes[runtimeName]
 	if !ok {
-		return ErrUnknownAction
+		return ErrUnknownRuntime
 	}
-	delete(w.actions, actionName)
+	delete(w.runtimes, runtimeName)
 
-	return action.Stop()
+	return runtime.Stop()
 }
 
 // Start запускает Watcher в работу и выходит
@@ -82,7 +82,7 @@ func (w *Watcher) start(ctx context.Context) error {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				if err := w.pingActions(); err != nil {
+				if err := w.pingRuntimes(); err != nil {
 					w.logger.Errorf("ping got error: %v", err)
 				}
 			}
@@ -92,13 +92,13 @@ func (w *Watcher) start(ctx context.Context) error {
 	return nil
 }
 
-func (w *Watcher) pingActions() error {
-	w.actionsMutex.RLock()
-	defer w.actionsMutex.RUnlock()
+func (w *Watcher) pingRuntimes() error {
+	w.runtimesMutex.RLock()
+	defer w.runtimesMutex.RUnlock()
 
-	for _, action := range w.actions {
-		if err := action.Ping(); err != nil {
-			w.logger.Errorf("ping for action '%s' failed: %v", action.name, err)
+	for _, runtime := range w.runtimes {
+		if err := runtime.Ping(); err != nil {
+			w.logger.Errorf("ping for runtime '%s' failed: %v", runtime.Name(), err)
 		}
 	}
 	return nil

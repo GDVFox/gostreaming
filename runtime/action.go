@@ -5,12 +5,14 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
 	"sync"
 	"sync/atomic"
 
 	"golang.org/x/sync/errgroup"
 
+	"github.com/GDVFox/gostreaming/runtime/config"
 	"github.com/GDVFox/gostreaming/runtime/external"
 	"github.com/GDVFox/gostreaming/runtime/logs"
 )
@@ -22,15 +24,17 @@ type Action struct {
 
 	in  *external.TCPServer
 	out []*external.TCPClient
+	opt *config.ActionOptions
 }
 
 // NewAction создает новый объект Action.
-func NewAction(path string, in *external.TCPServer, out []*external.TCPClient) *Action {
+func NewAction(path string, in *external.TCPServer, out []*external.TCPClient, opt *config.ActionOptions) *Action {
 	return &Action{
 		path:      path,
 		isRunning: 0,
 		in:        in,
 		out:       out,
+		opt:       opt,
 	}
 }
 
@@ -46,7 +50,10 @@ func (a *Action) Run(ctx context.Context) error {
 	}()
 
 	wg, runCtx := errgroup.WithContext(ctx)
-	runActionCommand := exec.CommandContext(runCtx, a.path)
+	runActionCommand := exec.CommandContext(runCtx, a.path, a.opt.Args...)
+	runActionCommand.Env = os.Environ()
+	runActionCommand.Env = append(runActionCommand.Env, a.opt.EnvAsSlice()...)
+
 	inCmd, err := runActionCommand.StdinPipe()
 	if err != nil {
 		return fmt.Errorf("can not get stdin pipe: %w", err)
@@ -72,7 +79,7 @@ func (a *Action) Run(ctx context.Context) error {
 	if err := runActionCommand.Start(); err != nil {
 		return fmt.Errorf("can not start action: %w", err)
 	}
-	logs.Logger.Infof("action: %s started", a.path)
+	logs.Logger.Infof("action started with command: %s", runActionCommand.String())
 
 	// Запускаем обработчики input/output для действия.
 	wg.Go(func() error {

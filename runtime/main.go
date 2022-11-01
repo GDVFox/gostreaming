@@ -24,6 +24,7 @@ func init() {
 	flag.StringVar(&config.Conf.Logger.Level, "log-level", "info", "Level for logging, default is info")
 	flag.StringVar(&config.Conf.InRaw, "in", "", "Input addresses")
 	flag.StringVar(&config.Conf.OutRaw, "out", "", "Output addresses")
+	flag.StringVar(&config.Conf.ActionOptionsRaw, "action-opt", "", "Action args and env variables in JSON format")
 }
 
 func main() {
@@ -62,7 +63,7 @@ func main() {
 		outs[i] = external.NewTCPClient(outAddr, cfg)
 	}
 
-	action := NewAction(config.Conf.ActionPath, server, outs)
+	action := NewAction(config.Conf.ActionPath, server, outs, config.Conf.ActionOptions)
 	serviceServer := NewServiceServer(config.Conf.ServiceSock, action)
 
 	wg, runCtx := errgroup.WithContext(ctx)
@@ -88,5 +89,5 @@ func main() {
 		fmt.Fprintf(os.Stderr, "action run error: %v\n", err)
 		os.Exit(1)
 	}
-	logs.Logger.Infof("runtime started for action %s stopped.", config.Conf.ActionPath)
+	logs.Logger.Infof("runtime stopped for action: %s", config.Conf.ActionPath)
 }

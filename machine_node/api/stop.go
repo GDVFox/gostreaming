@@ -16,8 +16,8 @@ func StopAction(r *http.Request) (*httplib.Response, error) {
 		return httplib.NewBadRequestResponse(httplib.NewErrorBody(BadUnmarshalRequestErrorCode, err.Error())), nil
 	}
 
-	if err := watcher.ActionWatcher.StopAction(req.SchemeName, req.ActionName); err != nil {
-		if err == watcher.ErrUnknownAction {
+	if err := watcher.RuntimeWatcher.StopRuntime(req.SchemeName, req.ActionName); err != nil {
+		if err == watcher.ErrUnknownRuntime {
 			return httplib.NewNotFoundResponse(httplib.NewErrorBody(NoActionErrorCode, err.Error())), nil
 		}
 		return httplib.NewInternalErrorResponse(httplib.NewErrorBody(InternalError, err.Error())), nil

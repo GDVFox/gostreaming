@@ -63,9 +63,10 @@ func (m *MachineClinets) SendRunAction(ctx context.Context, schemeName string, n
 		ActionName: node.Name,
 		Action:     node.Action,
 		Port:       node.Port,
-		Replicas:   node.Replicas,
 		In:         node.In,
 		Out:        node.Out,
+		Args:       node.Args,
+		Env:        node.Env,
 	}
 	return m.sendCommand(machineURL.String(), reqBody)
 }

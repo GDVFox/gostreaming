@@ -27,13 +27,14 @@ type Plan struct {
 
 // NodePlan описание узла, предназначенного для запуска на сервере.
 type NodePlan struct {
-	Name     string   `json:"name"`
-	Action   string   `json:"action"`
-	Host     string   `json:"host"`
-	Port     int      `json:"port"`
-	Replicas int      `json:"replicas"`
-	In       []string `json:"in"`
-	Out      []string `json:"out"`
+	Name   string            `json:"name"`
+	Action string            `json:"action"`
+	Host   string            `json:"host"`
+	Port   int               `json:"port"`
+	In     []string          `json:"in"`
+	Out    []string          `json:"out"`
+	Args   []string          `json:"args"`
+	Env    map[string]string `json:"env"`
 }
 
 // node вершина в дереве связей узлов.
@@ -110,13 +111,14 @@ func (s *Planner) Plan() (*Plan, error) {
 				out[i] = s.nodes[n].Host + ":" + strconv.Itoa(s.nodes[n].Port)
 			}
 			orderedNodePlans = append(orderedNodePlans, &NodePlan{
-				Name:     nodeDescr.Name,
-				Action:   nodeDescr.Action,
-				Host:     nodeDescr.Host,
-				Port:     nodeDescr.Port,
-				Replicas: nodeDescr.Replicas,
-				In:       in,
-				Out:      out,
+				Name:   nodeDescr.Name,
+				Action: nodeDescr.Action,
+				Host:   nodeDescr.Host,
+				Port:   nodeDescr.Port,
+				In:     in,
+				Out:    out,
+				Args:   nodeDescr.Args,
+				Env:    nodeDescr.Env,
 			})
 			continue
 		}

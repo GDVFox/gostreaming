@@ -32,26 +32,29 @@ func RunAction(r *http.Request) (*httplib.Response, error) {
 	}
 	logger.Debugf("binary action '%s' received", req.Action)
 
-	opt := &watcher.ActionOptions{
+	opt := &watcher.RuntimeOptions{
 		Port:             req.Port,
-		Replicas:         req.Replicas,
 		In:               req.In,
 		Out:              req.Out,
 		RuntimePath:      config.Conf.RuntimePath,
 		RuntimeLogsDir:   config.Conf.RuntimeLogsDir,
 		ActionStartRetry: config.Conf.ActionStartRetry,
+		ActionOptions: &watcher.ActionOptions{
+			Args: req.Args,
+			Env:  req.Env,
+		},
 	}
-	action := watcher.NewAction(req.SchemeName, req.ActionName, actionBytes, logger, opt)
+	runtime := watcher.NewRuntime(req.SchemeName, req.ActionName, actionBytes, logger, opt)
 
-	if err := action.Start(r.Context()); err != nil {
+	if err := runtime.Start(r.Context()); err != nil {
 		return httplib.NewInternalErrorResponse(httplib.NewErrorBody(InternalError, err.Error())), nil
 	}
-	logger.Debugf("action '%s' started", action.Name())
+	logger.Debugf("runtime '%s' started", runtime.Name())
 
-	if err := watcher.ActionWatcher.RegisterAction(action); err != nil {
+	if err := watcher.RuntimeWatcher.RegisterRuntime(runtime); err != nil {
 		return httplib.NewInternalErrorResponse(httplib.NewErrorBody(InternalError, err.Error())), nil
 	}
-	logger.Debugf("action '%s' registered", action.Name())
+	logger.Debugf("runtime '%s' registered", runtime.Name())
 
 	logger.Infof("started action '%s' from scheme '%s'", req.ActionName, req.SchemeName)
 	return httplib.NewOKResponse(nil, false), nil

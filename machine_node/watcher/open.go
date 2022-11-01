@@ -6,11 +6,11 @@ import (
 	"github.com/GDVFox/gostreaming/util"
 )
 
-// ActionWatcher объект синглтон для слежения за работоспособностью действий.
-var ActionWatcher *Watcher
+// RuntimeWatcher объект синглтон для слежения за работоспособностью действий.
+var RuntimeWatcher *Watcher
 
-// StartWatcher инициализирует синглтон ActionWatcher и запускает его.
+// StartWatcher инициализирует синглтон RuntimeWatcher и запускает его.
 func StartWatcher(ctx context.Context, l *util.Logger, cfg *Config) error {
-	ActionWatcher = newWatcher(l, cfg)
-	return ActionWatcher.start(ctx)
+	RuntimeWatcher = newWatcher(l, cfg)
+	return RuntimeWatcher.start(ctx)
 }

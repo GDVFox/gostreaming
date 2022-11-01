@@ -13,15 +13,18 @@ var (
 	ErrExpectedDataflow         = errors.New("expected not empty dataflow")
 	ErrNodeNameUsed             = errors.New("node name already used")
 	ErrNodePortUsed             = errors.New("port already used")
+	ErrEmptyArg                 = errors.New("arg can not be empty")
+	ErrEmptyEnvVarName          = errors.New("env variable name can not be empty")
 )
 
 // NodeDescription ...
 type NodeDescription struct {
-	Name     string `yaml:"name" json:"name"`
-	Action   string `yaml:"action" json:"action"`
-	Host     string `yaml:"host" json:"host"`
-	Port     int    `yaml:"port" json:"port"`
-	Replicas int    `yaml:"replicas" json:"replicas"`
+	Name   string            `yaml:"name" json:"name"`
+	Action string            `yaml:"action" json:"action"`
+	Host   string            `yaml:"host" json:"host"`
+	Port   int               `yaml:"port" json:"port"`
+	Args   []string          `yaml:"args" json:"args"`
+	Env    map[string]string `yaml:"env" json:"env"`
 }
 
 // Check выполняет проверку правильности описания узла.
@@ -38,9 +41,18 @@ func (d *NodeDescription) Check() error {
 	if d.Port == 0 {
 		return ErrExpectedPort
 	}
-	if d.Replicas <= 0 {
-		return ErrExpectedPositiveReplicas
+	for _, arg := range d.Args {
+		if arg == "" {
+			return ErrEmptyArg
+		}
 	}
+	for name := range d.Env {
+		if name == "" {
+			return ErrEmptyEnvVarName
+		}
+		// при этом допускается пустое value, как в unix системах.
+	}
+
 	return nil
 }
 
