@@ -15,7 +15,6 @@ var (
 )
 
 var (
-	// UserListUsers пул с протобуфными структурами пользователей.
 	messages = messagePool{
 		p: sync.Pool{
 			New: func() interface{} {

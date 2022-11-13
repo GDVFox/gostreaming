@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"strconv"
 
 	"github.com/GDVFox/gostreaming/runtime/logs"
 	"golang.org/x/sync/errgroup"
@@ -15,6 +16,8 @@ import (
 const (
 	// PingCommand команда для проверки состояния runtime.
 	PingCommand uint8 = 0x1
+	// ChangeOutCommand команда для изменения выходного потока.
+	ChangeOutCommand uint8 = 0x2
 )
 
 const (
@@ -26,18 +29,25 @@ const (
 	UnknownCommandResponse uint8 = 0x2
 )
 
+type changeOutRequest struct {
+	OldIP   uint32
+	NewIP   uint32
+	OldPort uint16
+	NewPort uint16
+}
+
 // ServiceServer UDP сервис для получения команд от machine_node.
 type ServiceServer struct {
 	listener net.Listener
-	action   *Action
+	runtime  *Runtime
 
 	sockAddr string
 }
 
 // NewServiceServer создает новый UDP сервисный сервер.
-func NewServiceServer(addr string, action *Action) *ServiceServer {
+func NewServiceServer(addr string, runtime *Runtime) *ServiceServer {
 	return &ServiceServer{
-		action:   action,
+		runtime:  runtime,
 		sockAddr: addr,
 	}
 }
@@ -132,6 +142,9 @@ func (s *ServiceServer) handleService(conn net.Conn, errs chan error) {
 		case PingCommand:
 			logs.Logger.Info("got ping command")
 			err = s.ping(conn)
+		case ChangeOutCommand:
+			logs.Logger.Info("got change out command")
+			err = s.changeOut(conn)
 		default:
 			logs.Logger.Warn("got unknown command")
 			err = s.unknown(conn)
@@ -144,10 +157,35 @@ func (s *ServiceServer) handleService(conn net.Conn, errs chan error) {
 }
 
 func (s *ServiceServer) ping(conn net.Conn) error {
-	if s.action.IsRunning() {
+	if s.runtime.IsRunning() {
 		return binary.Write(conn, binary.BigEndian, OKResponse)
 	}
 	return binary.Write(conn, binary.BigEndian, FailResponse)
+}
+
+func (s *ServiceServer) changeOut(conn net.Conn) error {
+	req := &changeOutRequest{}
+	if err := binary.Read(conn, binary.BigEndian, req); err != nil {
+		return err
+	}
+
+	oldAddr := buildAddress(req.OldIP, req.OldPort)
+	newAddr := buildAddress(req.NewIP, req.NewPort)
+	if err := s.runtime.ChangeOut(oldAddr, newAddr); err != nil {
+		logs.Logger.Errorf("can not change out: %s", err)
+		return binary.Write(conn, binary.BigEndian, FailResponse)
+	}
+
+	return binary.Write(conn, binary.BigEndian, OKResponse)
+}
+
+func buildAddress(ipNum uint32, portNum uint16) string {
+	ipByte := make([]byte, 4)
+	binary.BigEndian.PutUint32(ipByte, ipNum)
+	ip := net.IP(ipByte)
+
+	port := strconv.FormatUint(uint64(portNum), 10)
+	return ip.String() + ":" + port
 }
 
 func (s *ServiceServer) unknown(conn net.Conn) error {

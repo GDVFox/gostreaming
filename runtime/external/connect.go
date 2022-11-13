@@ -24,7 +24,7 @@ func NewTCPConnectionConfig() *TCPConnectionConfig {
 }
 
 // TCPConnection обертка для tcp коннекта
-type connection struct {
+type TCPConnection struct {
 	net.Conn
 	readTimeout  time.Duration
 	writeTimeout time.Duration
@@ -33,7 +33,16 @@ type connection struct {
 	lastWriteDeadline time.Time
 }
 
-func (c *connection) Read(b []byte) (int, error) {
+// NewTCPConnection создает новую обертку для TCP подключения.
+func NewTCPConnection(conn net.Conn, cfg *TCPConnectionConfig) *TCPConnection {
+	return &TCPConnection{
+		Conn:         conn,
+		readTimeout:  cfg.ReadTimeout,
+		writeTimeout: cfg.WriteTimeout,
+	}
+}
+
+func (c *TCPConnection) Read(b []byte) (int, error) {
 	now := TimeNow()
 	if c.readTimeout != 0 && now.Sub(c.lastReadDeadline) > c.readTimeout {
 		c.Conn.SetReadDeadline(now.Add(c.readTimeout))
@@ -42,7 +51,7 @@ func (c *connection) Read(b []byte) (int, error) {
 	return c.Conn.Read(b)
 }
 
-func (c *connection) Write(b []byte) (int, error) {
+func (c *TCPConnection) Write(b []byte) (int, error) {
 	now := TimeNow()
 	if c.writeTimeout != 0 && now.Sub(c.lastWriteDeadline) > c.writeTimeout {
 		c.Conn.SetWriteDeadline(now.Add(c.writeTimeout))
@@ -51,6 +60,7 @@ func (c *connection) Write(b []byte) (int, error) {
 	return c.Conn.Write(b)
 }
 
-func (c *connection) Close() error {
+// Close закрывает вложенное TCP соединение.
+func (c *TCPConnection) Close() error {
 	return c.Conn.Close()
 }

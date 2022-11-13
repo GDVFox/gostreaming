@@ -6,6 +6,7 @@ require (
 	github.com/DataDog/zstd v1.5.2
 	github.com/google/uuid v1.3.0
 	github.com/gorilla/mux v1.8.0
+	github.com/mohae/deepcopy v0.0.0-20170929034955-c48cc78d4826
 	github.com/pkg/errors v0.9.1
 	go.etcd.io/etcd/client/v3 v3.5.6
 	go.uber.org/zap v1.17.0
@@ -14,10 +15,16 @@ require (
 )
 
 require (
+	github.com/GDVFox/ctxio v0.0.0-20210518102935-c4e9c3452111
+	github.com/syndtr/goleveldb v1.0.0
+)
+
+require (
 	github.com/coreos/go-semver v0.3.0 // indirect
 	github.com/coreos/go-systemd/v22 v22.3.2 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/protobuf v1.5.2 // indirect
+	github.com/golang/snappy v0.0.0-20180518054509-2e65f85255db // indirect
 	go.etcd.io/etcd/api/v3 v3.5.6 // indirect
 	go.etcd.io/etcd/client/pkg/v3 v3.5.6 // indirect
 	go.uber.org/atomic v1.7.0 // indirect

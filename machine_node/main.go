@@ -57,8 +57,10 @@ func main() {
 
 	r := mux.NewRouter().PathPrefix("/v1").Subrouter()
 
+	r.HandleFunc("/ping", httplib.CreateHandler(api.Ping, logger)).Methods(http.MethodGet)
 	r.HandleFunc("/run", httplib.CreateHandler(api.RunAction, logger)).Methods(http.MethodPost)
 	r.HandleFunc("/stop", httplib.CreateHandler(api.StopAction, logger)).Methods(http.MethodPost)
+	r.HandleFunc("/change_out", httplib.CreateHandler(api.ChangeActionOut, logger)).Methods(http.MethodPost)
 
 	signalChannel := make(chan os.Signal, 1)
 	signal.Notify(signalChannel, syscall.SIGINT, syscall.SIGTERM)

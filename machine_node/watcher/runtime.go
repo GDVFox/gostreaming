@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 
 	"github.com/GDVFox/gostreaming/util"
@@ -23,6 +24,8 @@ import (
 const (
 	// PingCommand команда для проверки состояния runtime.
 	PingCommand uint8 = 0x1
+	// ChangeOutCommand команда для изменения выходного потока.
+	ChangeOutCommand uint8 = 0x2
 )
 
 const (
@@ -34,8 +37,16 @@ const (
 
 // Возможные ошибки
 var (
-	ErrPingFailed = errors.New("ping returned not OK response")
+	ErrCommandFailed = errors.New("command returned not OK response")
+	ErrBadOut        = errors.New("address must be in format <host>:<port>")
 )
+
+type changeOutRequest struct {
+	OldIP   uint32
+	NewIP   uint32
+	OldPort uint16
+	NewPort uint16
+}
 
 // ActionOptions опции для запуска действия
 type ActionOptions struct {
@@ -58,9 +69,14 @@ type RuntimeOptions struct {
 
 // Runtime структура, представляющая собой запущенное действие
 type Runtime struct {
-	name string
-	bin  []byte
-	opt  *RuntimeOptions
+	communicationMutex sync.Mutex
+
+	name       string
+	schemeName string
+	actionName string
+
+	bin []byte
+	opt *RuntimeOptions
 
 	binPath         string
 	cmd             *exec.Cmd
@@ -74,9 +90,11 @@ type Runtime struct {
 // NewRuntime создает новое действие.
 func NewRuntime(schemeName, actionName string, bin []byte, l *util.Logger, opt *RuntimeOptions) *Runtime {
 	return &Runtime{
-		name: buildRuntimeName(schemeName, actionName),
-		bin:  bin,
-		opt:  opt,
+		name:       buildRuntimeName(schemeName, actionName),
+		schemeName: schemeName,
+		actionName: actionName,
+		bin:        bin,
+		opt:        opt,
 
 		logger: l,
 	}
@@ -85,6 +103,16 @@ func NewRuntime(schemeName, actionName string, bin []byte, l *util.Logger, opt *
 // Name возвращает имя запущенного действия
 func (r *Runtime) Name() string {
 	return r.name
+}
+
+// SchemeName возвращает имя схемы, частью которой является рантайм.
+func (r *Runtime) SchemeName() string {
+	return r.schemeName
+}
+
+// ActionName возвращает имя действия, частью которого является рантайм.
+func (r *Runtime) ActionName() string {
+	return r.actionName
 }
 
 // Start запускает действие и выходит, в случае успешного запуска.
@@ -105,6 +133,7 @@ func (r *Runtime) Start(ctx context.Context) error {
 	logFileAddr := filepath.Join("/", r.opt.RuntimeLogsDir, r.name+strconv.Itoa(r.opt.Port)+".log")
 	r.cmd = exec.Command(
 		r.opt.RuntimePath,
+		"--name="+r.Name(),
 		"--action="+r.binPath,
 		"--replicas="+strconv.Itoa(r.opt.Replicas),
 		"--port="+strconv.Itoa(r.opt.Port),
@@ -181,6 +210,9 @@ func (r *Runtime) connect(ctx context.Context) error {
 
 // Ping проверяет работоспособность действия с помощью отправки ping.
 func (r *Runtime) Ping() error {
+	r.communicationMutex.Lock()
+	defer r.communicationMutex.Unlock()
+
 	if err := binary.Write(r.serviceConn, binary.BigEndian, PingCommand); err != nil {
 		return err
 	}
@@ -191,9 +223,69 @@ func (r *Runtime) Ping() error {
 	}
 
 	if resp != OKResponse {
-		return ErrPingFailed
+		return ErrCommandFailed
 	}
 	return nil
+}
+
+// ChangeOut заменяет oldOut на newOut.
+func (r *Runtime) ChangeOut(oldOut, newOut string) error {
+	r.communicationMutex.Lock()
+	defer r.communicationMutex.Unlock()
+
+	oldIP, oldPort, err := r.parseAddr(oldOut)
+	if err != nil {
+		return fmt.Errorf("can not parse old out %s: %w", oldOut, err)
+	}
+
+	newIP, newPort, err := r.parseAddr(newOut)
+	if err != nil {
+		return fmt.Errorf("can not parse new out %s: %w", newOut, err)
+	}
+
+	if err := binary.Write(r.serviceConn, binary.BigEndian, ChangeOutCommand); err != nil {
+		return fmt.Errorf("can not send change out command: %w", err)
+	}
+
+	req := changeOutRequest{
+		OldIP:   oldIP,
+		OldPort: oldPort,
+		NewIP:   newIP,
+		NewPort: newPort,
+	}
+	if err := binary.Write(r.serviceConn, binary.BigEndian, req); err != nil {
+		return fmt.Errorf("can not send change out request: %w", err)
+	}
+
+	var resp uint8
+	if err := binary.Read(r.serviceConn, binary.BigEndian, &resp); err != nil {
+		return err
+	}
+
+	if resp != OKResponse {
+		return ErrCommandFailed
+	}
+	return nil
+}
+
+func (r *Runtime) parseAddr(addr string) (uint32, uint16, error) {
+	addrParts := strings.Split(addr, ":")
+	if len(addrParts) != 2 {
+		return 0, 0, fmt.Errorf("can not split %s: %w", addr, ErrBadOut)
+	}
+
+	ipPart := net.ParseIP(addrParts[0])
+	if ipPart == nil {
+		return 0, 0, fmt.Errorf("can not parse IP %s: %w", addrParts[0], ErrBadOut)
+	}
+	ipPart = ipPart.To4()
+
+	portPart, err := strconv.ParseUint(addrParts[1], 10, 16)
+	if err != nil {
+		return 0, 0, fmt.Errorf("can not parse PORT %s: %w", addrParts[0], ErrBadOut)
+	}
+
+	return binary.BigEndian.Uint32(ipPart), uint16(portPart), nil
 }
 
 // Stop завершает работу действия, возвращает ошибку из stderr.

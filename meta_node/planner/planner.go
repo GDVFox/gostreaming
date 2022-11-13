@@ -27,14 +27,15 @@ type Plan struct {
 
 // NodePlan описание узла, предназначенного для запуска на сервере.
 type NodePlan struct {
-	Name   string            `json:"name"`
-	Action string            `json:"action"`
-	Host   string            `json:"host"`
-	Port   int               `json:"port"`
-	In     []string          `json:"in"`
-	Out    []string          `json:"out"`
-	Args   []string          `json:"args"`
-	Env    map[string]string `json:"env"`
+	Name      string             `json:"name"`
+	Action    string             `json:"action"`
+	Host      string             `json:"host"`
+	Port      int                `json:"port"`
+	In        []string           `json:"in"`
+	Out       []string           `json:"out"`
+	Args      []string           `json:"args"`
+	Env       map[string]string  `json:"env"`
+	Addresses []*AddrDescription `json:"addresses"`
 }
 
 // node вершина в дереве связей узлов.
@@ -104,21 +105,23 @@ func (s *Planner) Plan() (*Plan, error) {
 			nodeDescr := s.nodes[node]
 			in := make([]string, len(s.nodeConnections[node].In))
 			for i, n := range s.nodeConnections[node].In {
-				in[i] = s.nodes[n].Host + ":" + strconv.Itoa(s.nodes[n].Port)
+				in[i] = s.scheme.Name + "_" + s.nodes[n].Name
 			}
 			out := make([]string, len(s.nodeConnections[node].Out))
+			// По умолчанию используется первый адрес.
 			for i, n := range s.nodeConnections[node].Out {
-				out[i] = s.nodes[n].Host + ":" + strconv.Itoa(s.nodes[n].Port)
+				out[i] = s.nodes[n].Addresses[0].Host + ":" + strconv.Itoa(s.nodes[n].Addresses[0].Port)
 			}
 			orderedNodePlans = append(orderedNodePlans, &NodePlan{
-				Name:   nodeDescr.Name,
-				Action: nodeDescr.Action,
-				Host:   nodeDescr.Host,
-				Port:   nodeDescr.Port,
-				In:     in,
-				Out:    out,
-				Args:   nodeDescr.Args,
-				Env:    nodeDescr.Env,
+				Name:      nodeDescr.Name,
+				Action:    nodeDescr.Action,
+				Host:      nodeDescr.Addresses[0].Host,
+				Port:      nodeDescr.Addresses[0].Port,
+				In:        in,
+				Out:       out,
+				Args:      nodeDescr.Args,
+				Env:       nodeDescr.Env,
+				Addresses: nodeDescr.Addresses,
 			})
 			continue
 		}

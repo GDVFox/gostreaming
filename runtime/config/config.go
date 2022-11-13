@@ -30,6 +30,7 @@ func (o *ActionOptions) EnvAsSlice() []string {
 type Config struct {
 	Logger util.LoggingConfig
 
+	Name             string
 	ActionPath       string
 	Replicas         int
 	Port             int

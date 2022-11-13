@@ -6,6 +6,7 @@ import (
 
 	"github.com/GDVFox/gostreaming/meta_node/api/common"
 	"github.com/GDVFox/gostreaming/meta_node/external"
+	"github.com/GDVFox/gostreaming/meta_node/watcher"
 	"github.com/GDVFox/gostreaming/util/httplib"
 	"github.com/GDVFox/gostreaming/util/storage"
 	"github.com/gorilla/mux"
@@ -28,18 +29,12 @@ func RunScheme(r *http.Request) (*httplib.Response, error) {
 		return httplib.NewInternalErrorResponse(httplib.NewErrorBody(common.ETCDErrorCode, err.Error())), nil
 	}
 
-	for _, node := range plan.Nodes {
-		if err := external.Machines.SendRunAction(r.Context(), plan.Scheme.Name, node); err != nil {
-			if errors.Cause(err) == external.ErrNoAction {
-				return httplib.NewBadRequestResponse(httplib.NewErrorBody(common.BadNameErrorCode,
-					fmt.Sprintf("scheme contains unknown action: %s", node.Action))), nil
-			} else if errors.Cause(err) == external.ErrNoHost {
-				return httplib.NewBadRequestResponse(httplib.NewErrorBody(common.BadNameErrorCode,
-					fmt.Sprintf("scheme contains unknown host: %s", node.Host))), nil
-			}
-			return httplib.NewInternalErrorResponse(httplib.NewErrorBody(common.MachineErrorCode,
-				fmt.Sprintf("unknown error: %s", err.Error()))), nil
+	if err := watcher.Watcher.RunPlan(plan); err != nil {
+		if errors.Cause(err) == watcher.ErrNoAction || errors.Cause(err) == watcher.ErrNoHost {
+			return httplib.NewBadRequestResponse(httplib.NewErrorBody(common.BadNameErrorCode, err.Error())), nil
 		}
+		return httplib.NewInternalErrorResponse(httplib.NewErrorBody(common.MachineErrorCode,
+			fmt.Sprintf("unknown error: %s", err.Error()))), nil
 	}
 
 	return httplib.NewOKResponse(nil, false), nil

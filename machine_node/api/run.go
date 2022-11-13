@@ -46,15 +46,10 @@ func RunAction(r *http.Request) (*httplib.Response, error) {
 	}
 	runtime := watcher.NewRuntime(req.SchemeName, req.ActionName, actionBytes, logger, opt)
 
-	if err := runtime.Start(r.Context()); err != nil {
+	if err := watcher.RuntimeWatcher.StartRuntime(r.Context(), runtime); err != nil {
 		return httplib.NewInternalErrorResponse(httplib.NewErrorBody(InternalError, err.Error())), nil
 	}
 	logger.Debugf("runtime '%s' started", runtime.Name())
-
-	if err := watcher.RuntimeWatcher.RegisterRuntime(runtime); err != nil {
-		return httplib.NewInternalErrorResponse(httplib.NewErrorBody(InternalError, err.Error())), nil
-	}
-	logger.Debugf("runtime '%s' registered", runtime.Name())
 
 	logger.Infof("started action '%s' from scheme '%s'", req.ActionName, req.SchemeName)
 	return httplib.NewOKResponse(nil, false), nil

@@ -6,4 +6,5 @@ var (
 	NoActionErrorCode            = "action_not_found"
 	ETCDErrorCode                = "etcd_error"
 	InternalError                = "internal_error"
+	BadTelemetry                 = "bad_telemetry"
 )

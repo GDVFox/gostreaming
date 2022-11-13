@@ -12,5 +12,6 @@ var RuntimeWatcher *Watcher
 // StartWatcher инициализирует синглтон RuntimeWatcher и запускает его.
 func StartWatcher(ctx context.Context, l *util.Logger, cfg *Config) error {
 	RuntimeWatcher = newWatcher(l, cfg)
-	return RuntimeWatcher.start(ctx)
+	go RuntimeWatcher.run(ctx)
+	return nil
 }
