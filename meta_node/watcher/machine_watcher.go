@@ -3,7 +3,6 @@ package watcher
 import (
 	"context"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/GDVFox/gostreaming/meta_node/planner"
@@ -34,9 +33,6 @@ func NewMachineWatcherConfig() *MachineWatcherConfig {
 
 // MachineWatcher структура для контроля запущенных действий.
 type MachineWatcher struct {
-	runtimesMutex sync.RWMutex
-	runtimes      map[string]*message.RuntimeTelemetry
-
 	machines map[string]*Machine
 
 	cfg    *MachineWatcherConfig
@@ -54,7 +50,6 @@ func newMachineWatcher(l *util.Logger, cfg *MachineWatcherConfig) (*MachineWatch
 	}
 
 	return &MachineWatcher{
-		runtimes: make(map[string]*message.RuntimeTelemetry),
 		machines: machines,
 		cfg:      cfg,
 		logger:   l,
@@ -91,28 +86,7 @@ func (w *MachineWatcher) sendChangeOut(ctx context.Context, schemeName, oldOut, 
 	return machine.SendChangeOut(ctx, schemeName, node.Name, oldOut, newOut)
 }
 
-// GetRuntimesTelemetry возвращает информацию о состоянии рантаймов.
-// Возвращаемое значение нельзя модицифировать, так как оно разделяется между вызывающими.
-func (w *MachineWatcher) getRuntimesTelemetry() map[string]*message.RuntimeTelemetry {
-	w.runtimesMutex.RLock()
-	defer w.runtimesMutex.RUnlock()
-	return w.runtimes
-}
-
-// Start запускает Watcher в работу и выходит
-func (w *MachineWatcher) run(ctx context.Context) {
-	ticker := time.NewTicker(time.Duration(w.cfg.PingFrequency))
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			w.pingMachines()
-		}
-	}
-}
-
-func (w *MachineWatcher) pingMachines() {
+func (w *MachineWatcher) pingMachines() map[string]*message.RuntimeTelemetry {
 	w.logger.Debugf("machine_watcher: started ping machines")
 
 	runtimes := make(map[string]*message.RuntimeTelemetry)
@@ -129,11 +103,8 @@ func (w *MachineWatcher) pingMachines() {
 		}
 	}
 
-	w.runtimesMutex.Lock()
-	w.runtimes = runtimes
-	w.runtimesMutex.Unlock()
-
 	w.logger.Debugf("machine_watcher: ping machines done")
+	return runtimes
 }
 
 func buildRuntimeName(schemeName, actionName string) string {

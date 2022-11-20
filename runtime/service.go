@@ -36,6 +36,10 @@ type changeOutRequest struct {
 	NewPort uint16
 }
 
+type runtimeTelemetry struct {
+	OldestOutput uint32
+}
+
 // ServiceServer UDP сервис для получения команд от machine_node.
 type ServiceServer struct {
 	listener net.Listener
@@ -158,8 +162,22 @@ func (s *ServiceServer) handleService(conn net.Conn, errs chan error) {
 
 func (s *ServiceServer) ping(conn net.Conn) error {
 	if s.runtime.IsRunning() {
-		return binary.Write(conn, binary.BigEndian, OKResponse)
+		oldestOutput, err := s.runtime.GetOldestOutput()
+		if err != nil {
+			logs.Logger.Errorf("service: can not get oldest output: %s", err)
+			return binary.Write(conn, binary.BigEndian, FailResponse)
+		}
+
+		if err := binary.Write(conn, binary.BigEndian, OKResponse); err != nil {
+			return err
+		}
+
+		telemetry := runtimeTelemetry{
+			OldestOutput: oldestOutput,
+		}
+		return binary.Write(conn, binary.BigEndian, telemetry)
 	}
+
 	return binary.Write(conn, binary.BigEndian, FailResponse)
 }
 

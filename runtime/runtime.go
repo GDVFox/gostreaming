@@ -126,6 +126,11 @@ func (a *Runtime) ChangeOut(oldOut, newOut string) error {
 	return a.forwarder.ChangeOut(oldOut, newOut)
 }
 
+// GetOldestOutput возвращает самый старый output_message_id, который хранится в логе.
+func (a *Runtime) GetOldestOutput() (uint32, error) {
+	return a.forwarder.GetOldestOutput()
+}
+
 // inCmd закроет handleIn, так как он писатель и может это делать по
 // https://golang.org/pkg/os/exec/#Cmd.StdinPipe
 func (a *Runtime) handleIn(ctx context.Context, cmdIn io.WriteCloser) error {

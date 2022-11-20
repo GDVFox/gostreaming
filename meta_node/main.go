@@ -63,6 +63,8 @@ func main() {
 	r.HandleFunc("/schemas/{scheme_name:[a-zA-z0-9]+}", httplib.CreateHandler(schemas.DeleteScheme, logger)).Methods(http.MethodDelete)
 	r.HandleFunc("/schemas/{scheme_name:[a-zA-z0-9]+}/run", httplib.CreateHandler(schemas.RunScheme, logger)).Methods(http.MethodPut)
 	r.HandleFunc("/schemas/{scheme_name:[a-zA-z0-9]+}/stop", httplib.CreateHandler(schemas.StopScheme, logger)).Methods(http.MethodPut)
+	r.HandleFunc("/schemas/{scheme_name:[a-zA-z0-9]+}/dashboard", httplib.CreateHandler(schemas.GetDashboard, logger)).Methods(http.MethodGet)
+	r.HandleFunc("/schemas/{scheme_name:[a-zA-z0-9]+}/send_dashboard", httplib.CreateWSHandler(schemas.SendDashboard, logger)).Methods(http.MethodGet)
 
 	signalChannel := make(chan os.Signal, 1)
 	signal.Notify(signalChannel, syscall.SIGINT, syscall.SIGTERM)

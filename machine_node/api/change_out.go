@@ -28,5 +28,5 @@ func ChangeActionOut(r *http.Request) (*httplib.Response, error) {
 
 	logger.Infof("changes out %s -> %s for action '%s' from scheme '%s'",
 		req.OldOut, req.NewOut, req.ActionName, req.SchemeName)
-	return httplib.NewOKResponse(nil, false), nil
+	return httplib.NewOKResponse(nil, httplib.ContentTypeRaw), nil
 }

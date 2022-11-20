@@ -43,7 +43,7 @@ func (l *ForwardLog) Write(inputID uint16, inputMsgID, outputMsgID uint32, data 
 // Trim отрезает от лога все сообщения, у которых output_id <= idBorder.
 // Может обрезать сообщения одновременно с записью, так как никогда не будет обрабатывать
 // одно и то же сообщение из-за того, что отправка происходит после записи в лог,
-// а значит если мы получили подтвержение на это сообщение, то оно уже было отправлено.
+// а значит если мы получили подтверждение на это сообщение, то оно уже было отправлено.
 func (l *ForwardLog) Trim(idBorder uint32) (map[uint16]uint32, error) {
 	inputMaxs := make(map[uint16]uint32)
 	for l.buffer.Size() != 0 {
@@ -60,6 +60,7 @@ func (l *ForwardLog) Trim(idBorder uint32) (map[uint16]uint32, error) {
 		}
 
 		if err := l.buffer.TrimFirst(); err != nil {
+			forwardLogItems.Put(fLogItem)
 			return nil, fmt.Errorf("can not trim buffer: %w", err)
 		}
 
@@ -67,13 +68,31 @@ func (l *ForwardLog) Trim(idBorder uint32) (map[uint16]uint32, error) {
 		// Но проверку на корректность буффера полезно сделать для дебага.
 		// Случай равенства может быть для источника, так как там все InputMessageID есть 0.
 		if msgID, ok := inputMaxs[fLogItem.Header.InputID]; ok && msgID > fLogItem.Header.InputMessageID {
+			forwardLogItems.Put(fLogItem)
 			return nil, fmt.Errorf("for input_id %d got message_id %d expected greater than %d",
 				fLogItem.Header.InputID, fLogItem.Header.InputMessageID, msgID)
 		}
 		inputMaxs[fLogItem.Header.InputID] = fLogItem.Header.InputMessageID
+
+		forwardLogItems.Put(fLogItem)
 	}
 
 	return inputMaxs, nil
+}
+
+// GetOldestOutput возвращает самый старый output_message_id, который хранится в логе.
+func (l *ForwardLog) GetOldestOutput() (uint32, error) {
+	if l.buffer.Size() == 0 {
+		return 0, nil
+	}
+
+	fLogItem := forwardLogItems.Get()
+	defer forwardLogItems.Put(fLogItem)
+
+	if err := l.buffer.LoadFirst(fLogItem); err != nil {
+		return 0, fmt.Errorf("can not read front buffer header: %w", err)
+	}
+	return fLogItem.Header.OutputMessageID, nil
 }
 
 // Close закрывает ForwardLog и очищает занимаемые ресурсы.

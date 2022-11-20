@@ -28,5 +28,5 @@ func GetAction(r *http.Request) (*httplib.Response, error) {
 		return httplib.NewInternalErrorResponse(httplib.NewErrorBody(common.ETCDErrorCode, err.Error())), nil
 	}
 
-	return httplib.NewOKResponse(action, false), nil
+	return httplib.NewOKResponse(action, httplib.ContentTypeRaw), nil
 }

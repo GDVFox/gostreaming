@@ -17,8 +17,9 @@ var (
 )
 
 type workingRuntime struct {
-	runtime     *Runtime
-	pingsFailed int
+	runtime      *Runtime
+	pingsFailed  int
+	oldestOutput uint32
 }
 
 // Config набор настроек для Watcher
@@ -115,9 +116,10 @@ func (w *Watcher) GetRuntimesTelemetry() []*message.RuntimeTelemetry {
 		}
 
 		telemetry := &message.RuntimeTelemetry{
-			SchemeName: runtime.runtime.SchemeName(),
-			ActionName: runtime.runtime.ActionName(),
-			Status:     status,
+			SchemeName:   runtime.runtime.SchemeName(),
+			ActionName:   runtime.runtime.ActionName(),
+			Status:       status,
+			OldestOutput: runtime.oldestOutput,
 		}
 
 		runtimes = append(runtimes, telemetry)
@@ -145,7 +147,8 @@ func (w *Watcher) pingRuntimes() {
 
 	w.logger.Debugf("started ping runtimes")
 	for runtimeName, runtime := range w.runtimes {
-		if err := runtime.runtime.Ping(); err != nil {
+		telemetry, err := runtime.runtime.Ping()
+		if err != nil {
 			runtime.pingsFailed++
 			w.logger.Warnf("ping for runtime '%s' failed: %v", runtimeName, err)
 
@@ -161,6 +164,7 @@ func (w *Watcher) pingRuntimes() {
 
 			continue
 		}
+		runtime.oldestOutput = telemetry.OldestOutput
 		runtime.pingsFailed = 0
 	}
 	w.logger.Debugf("ping runtimes done")

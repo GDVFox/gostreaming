@@ -52,5 +52,5 @@ func RunAction(r *http.Request) (*httplib.Response, error) {
 	logger.Debugf("runtime '%s' started", runtime.Name())
 
 	logger.Infof("started action '%s' from scheme '%s'", req.ActionName, req.SchemeName)
-	return httplib.NewOKResponse(nil, false), nil
+	return httplib.NewOKResponse(nil, httplib.ContentTypeRaw), nil
 }

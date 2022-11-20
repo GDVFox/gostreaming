@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/GDVFox/gostreaming/runtime/logs"
+	"github.com/GDVFox/gostreaming/util"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -76,7 +77,7 @@ type DefaultForwarder struct {
 
 // NewDefaultForwarder создает новый объект DefaultForwarder.
 func NewDefaultForwarder(name string, outs []string, cfg *DefaultForwarderConfig) (*DefaultForwarder, error) {
-	forwardLog, err := NewForwardLog(cfg.ForwardLogDir)
+	forwardLog, err := NewForwardLog(cfg.ForwardLogDir + util.RandString(16))
 	if err != nil {
 		return nil, err
 	}
@@ -152,6 +153,11 @@ func (f *DefaultForwarder) ChangeOut(oldOut, newOut string) error {
 
 	logs.Logger.Debugf("forwarder: changed out %s -> %s", oldOut, newOut)
 	return nil
+}
+
+// GetOldestOutput возвращает самый старый output_message_id, который хранится в логе.
+func (f *DefaultForwarder) GetOldestOutput() (uint32, error) {
+	return f.forwardLog.GetOldestOutput()
 }
 
 func (f *DefaultForwarder) runDownstream(ctx context.Context, downstreamIndex uint16, addr string) {

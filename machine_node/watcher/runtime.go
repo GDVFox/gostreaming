@@ -48,6 +48,11 @@ type changeOutRequest struct {
 	NewPort uint16
 }
 
+// RuntimeTelemetry информация о состоянии runtime.
+type RuntimeTelemetry struct {
+	OldestOutput uint32
+}
+
 // ActionOptions опции для запуска действия
 type ActionOptions struct {
 	Args []string          `json:"args"`
@@ -95,8 +100,7 @@ func NewRuntime(schemeName, actionName string, bin []byte, l *util.Logger, opt *
 		actionName: actionName,
 		bin:        bin,
 		opt:        opt,
-
-		logger: l,
+		logger:     l,
 	}
 }
 
@@ -188,7 +192,7 @@ func (r *Runtime) connect(ctx context.Context) error {
 			return err
 		}
 
-		if err := r.Ping(); err != nil {
+		if _, err := r.Ping(); err != nil {
 			return err
 		}
 
@@ -209,23 +213,29 @@ func (r *Runtime) connect(ctx context.Context) error {
 }
 
 // Ping проверяет работоспособность действия с помощью отправки ping.
-func (r *Runtime) Ping() error {
+func (r *Runtime) Ping() (*RuntimeTelemetry, error) {
 	r.communicationMutex.Lock()
 	defer r.communicationMutex.Unlock()
 
 	if err := binary.Write(r.serviceConn, binary.BigEndian, PingCommand); err != nil {
-		return err
+		return nil, err
 	}
 
 	var resp uint8
 	if err := binary.Read(r.serviceConn, binary.BigEndian, &resp); err != nil {
-		return err
+		return nil, err
 	}
 
 	if resp != OKResponse {
-		return ErrCommandFailed
+		return nil, ErrCommandFailed
 	}
-	return nil
+
+	telemetry := &RuntimeTelemetry{}
+	if err := binary.Read(r.serviceConn, binary.BigEndian, telemetry); err != nil {
+		return nil, err
+	}
+
+	return telemetry, nil
 }
 
 // ChangeOut заменяет oldOut на newOut.

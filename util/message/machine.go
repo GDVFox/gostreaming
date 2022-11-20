@@ -38,7 +38,8 @@ const (
 
 // RuntimeTelemetry набор информации о рантайме.
 type RuntimeTelemetry struct {
-	SchemeName string        `json:"scheme_name"`
-	ActionName string        `json:"action_name"`
-	Status     RuntimeStatus `json:"status"`
+	SchemeName   string        `json:"scheme_name"`
+	ActionName   string        `json:"action_name"`
+	Status       RuntimeStatus `json:"status"`
+	OldestOutput uint32        `json:"oldest_output"`
 }

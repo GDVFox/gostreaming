@@ -34,5 +34,5 @@ func GetScheme(r *http.Request) (*httplib.Response, error) {
 		return httplib.NewInternalErrorResponse(httplib.NewErrorBody(common.BadSchemeErrorCode, err.Error())), nil
 	}
 
-	return httplib.NewOKResponse(schemeData, true), nil
+	return httplib.NewOKResponse(schemeData, httplib.ContentTypeJSON), nil
 }

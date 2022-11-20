@@ -1,6 +1,7 @@
 package planner
 
 import (
+	"regexp"
 	"strconv"
 
 	"github.com/pkg/errors"
@@ -8,7 +9,7 @@ import (
 
 // Возможные ошибки проверки схемы
 var (
-	ErrExpectedNodeName         = errors.New("expected not empty node name")
+	ErrBadName                  = errors.New("name must contain only letters and numbers")
 	ErrExpectedAction           = errors.New("expected not empty action name")
 	ErrExpectedAddresses        = errors.New("expected not empty addresses")
 	ErrExpectedHost             = errors.New("expected not empty host")
@@ -20,6 +21,10 @@ var (
 	ErrNodeAddressUsed          = errors.New("address already used")
 	ErrEmptyArg                 = errors.New("arg can not be empty")
 	ErrEmptyEnvVarName          = errors.New("env variable name can not be empty")
+)
+
+var (
+	nodeNameReg = regexp.MustCompile(`^[a-zA-Z0-9]+$`)
 )
 
 // AddrDescription описание адреса сервера, на котором будет запущено действие
@@ -39,8 +44,8 @@ type NodeDescription struct {
 
 // Check выполняет проверку правильности описания узла.
 func (d *NodeDescription) Check() error {
-	if d.Name == "" {
-		return ErrExpectedNodeName
+	if ok := nodeNameReg.MatchString(d.Name); !ok {
+		return ErrBadName
 	}
 	if d.Action == "" {
 		return ErrExpectedAction
@@ -81,8 +86,8 @@ type Scheme struct {
 
 // Check выполняет проверку правильности задания схемы.
 func (s *Scheme) Check() error {
-	if s.Name == "" {
-		return ErrExpectedSchemeName
+	if ok := nodeNameReg.MatchString(s.Name); !ok {
+		return ErrBadName
 	}
 
 	names := make(map[string]struct{}, 0)

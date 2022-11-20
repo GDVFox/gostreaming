@@ -13,6 +13,7 @@ import (
 // а также по контролю за доставкой сообщений.
 type Forwarder interface {
 	Run(ctx context.Context) error
+	GetOldestOutput() (uint32, error)
 	Forward(inputID uint16, inputMsgID uint32, data []byte) error
 	ChangeOut(oldOut, newOut string) error
 	AckMessages() <-chan UpstreamAck
@@ -45,6 +46,11 @@ func (f *FakeForwarder) Run(ctx context.Context) error {
 // ChangeOut заглушка для изменения out.
 func (f *FakeForwarder) ChangeOut(oldOut, newOut string) error {
 	return nil
+}
+
+// GetOldestOutput всегда возвращает 0, так как forward log не нужен стоку.
+func (f *FakeForwarder) GetOldestOutput() (uint32, error) {
+	return 0, nil
 }
 
 // Forward отправляет сообщение дальше с гарантиями доставки.

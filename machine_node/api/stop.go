@@ -23,5 +23,5 @@ func StopAction(r *http.Request) (*httplib.Response, error) {
 		return httplib.NewInternalErrorResponse(httplib.NewErrorBody(InternalError, err.Error())), nil
 	}
 
-	return httplib.NewOKResponse(nil, false), nil
+	return httplib.NewOKResponse(nil, httplib.ContentTypeRaw), nil
 }

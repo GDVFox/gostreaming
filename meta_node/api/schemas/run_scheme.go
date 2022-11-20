@@ -37,5 +37,5 @@ func RunScheme(r *http.Request) (*httplib.Response, error) {
 			fmt.Sprintf("unknown error: %s", err.Error()))), nil
 	}
 
-	return httplib.NewOKResponse(nil, false), nil
+	return httplib.NewOKResponse(nil, httplib.ContentTypeRaw), nil
 }

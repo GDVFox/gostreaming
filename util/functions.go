@@ -1,5 +1,7 @@
 package util
 
+import "math/rand"
+
 // FindStringIndex возвращает индекс первого вхождения строки s в массиве a.
 func FindStringIndex(a []string, s string) int {
 	for i, str := range a {
@@ -8,4 +10,15 @@ func FindStringIndex(a []string, s string) int {
 		}
 	}
 	return -1
+}
+
+var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+// RandString возвращает строку длины n состоящую из случайных символов.
+func RandString(n int) string {
+	b := make([]rune, n)
+	for i := range b {
+		b[i] = letters[rand.Intn(len(letters))]
+	}
+	return string(b)
 }

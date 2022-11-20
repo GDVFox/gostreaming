@@ -10,9 +10,26 @@ import (
 
 	"github.com/GDVFox/gostreaming/meta_node/planner"
 	"github.com/GDVFox/gostreaming/util"
+	"github.com/GDVFox/gostreaming/util/message"
 	"github.com/mohae/deepcopy"
 	"github.com/pkg/errors"
 )
+
+// NodeTelemetry телеметрия узла, хранящая статистику по узлу.
+type NodeTelemetry struct {
+	Name         string
+	Action       string
+	Address      string
+	IsRunning    bool
+	OldestOutput uint32
+	PrevName     []string
+}
+
+// PlanTelemetry телеметрия плана, хранящая статистику по каждому узлу и связи узлов.
+type PlanTelemetry struct {
+	Name  string
+	Nodes []*NodeTelemetry
+}
 
 type planDescription struct {
 	nodes           []*planner.NodePlan
@@ -97,18 +114,53 @@ ProctionLoop:
 	return p.stopNodes(ctx)
 }
 
-func (p *Plan) protectPlan(ctx context.Context) {
-	p.logger.Debugf("plan %s: plan check started", p.planName)
+// GetTelemetry возвращает снимок состояния плана в момент вызова
+func (p *Plan) GetTelemetry() *PlanTelemetry {
+	p.planNodesMutex.RLock()
+	defer p.planNodesMutex.RUnlock()
 
-	telemetry := p.machineWatcher.getRuntimesTelemetry()
-
-	// останавливаем в обратном порядке.
-	for i := len(p.plan.nodes) - 1; i >= 0; i-- {
-		node := p.plan.nodes[i]
+	runtimesTelemetry := p.machineWatcher.pingMachines()
+	nodesTelemetry := make([]*NodeTelemetry, 0, len(p.plan.nodes))
+	for _, node := range p.plan.nodes {
 		runtimeName := buildRuntimeName(p.planName, node.Name)
 
-		_, isRunning := telemetry[runtimeName]
+		nodeTelemetry := &NodeTelemetry{
+			Name:     node.Name,
+			Action:   node.Action,
+			Address:  node.Host + ":" + strconv.Itoa(node.Port),
+			PrevName: make([]string, 0, len(node.In)),
+		}
+
+		for _, in := range node.In {
+			inParts := strings.Split(in, "_")
+			nodeTelemetry.PrevName = append(nodeTelemetry.PrevName, inParts[1])
+		}
+
+		runtimeTelemetry, isRunning := runtimesTelemetry[runtimeName]
 		if isRunning {
+			nodeTelemetry.IsRunning = true
+			nodeTelemetry.OldestOutput = runtimeTelemetry.OldestOutput
+		}
+
+		nodesTelemetry = append(nodesTelemetry, nodeTelemetry)
+	}
+
+	return &PlanTelemetry{
+		Name:  p.planName,
+		Nodes: nodesTelemetry,
+	}
+}
+
+func (p *Plan) protectPlan(ctx context.Context) {
+	p.planNodesMutex.Lock()
+	defer p.planNodesMutex.Unlock()
+
+	p.logger.Debugf("plan %s: plan check started", p.planName)
+
+	telemetry := p.machineWatcher.pingMachines()
+	for i, node := range p.plan.nodes {
+		runtimeName := buildRuntimeName(p.planName, node.Name)
+		if _, isRunning := telemetry[runtimeName]; isRunning {
 			continue
 		}
 
@@ -117,7 +169,7 @@ func (p *Plan) protectPlan(ctx context.Context) {
 		// Пытаемся поднять потерянные действия, пока не получится.
 		retryConfig := &util.RetryConfig{Count: 0, Delay: p.cfg.RetryDelay}
 		util.Retry(ctx, retryConfig, func() error {
-			if err := p.fixAction(ctx, i); err != nil {
+			if err := p.fixAction(ctx, i, telemetry); err != nil {
 				p.logger.Errorf("plan %s: can not fix action %s: %s", p.planName, node.Name, err)
 				return err
 			}
@@ -129,15 +181,12 @@ func (p *Plan) protectPlan(ctx context.Context) {
 	p.logger.Debugf("plan %s: plan check done", p.planName)
 }
 
-func (p *Plan) fixAction(ctx context.Context, actionIndex int) error {
-	p.planNodesMutex.RLock()
+// fixAction не tread-safe для planNode, должен запускаться под мьютексом
+func (p *Plan) fixAction(ctx context.Context, actionIndex int, telemetry map[string]*message.RuntimeTelemetry) error {
 	planNode := deepcopy.Copy(p.plan.nodes[actionIndex]).(*planner.NodePlan)
-	addrIndex := p.plan.planAddrIndexes[actionIndex]
-	p.planNodesMutex.RUnlock()
-
 	oldNodeAddr := planNode.Host + ":" + strconv.Itoa(planNode.Port)
 
-	newAddrIndex := (addrIndex + 1) % len(planNode.Addresses)
+	newAddrIndex := (p.plan.planAddrIndexes[actionIndex] + 1) % len(planNode.Addresses)
 	newAddr := planNode.Addresses[newAddrIndex]
 	newNodeAddr := newAddr.Host + ":" + strconv.Itoa(newAddr.Port)
 
@@ -155,6 +204,17 @@ func (p *Plan) fixAction(ctx context.Context, actionIndex int) error {
 			return fmt.Errorf("plan %s: unknown in: %s", p.planName, in)
 		}
 
+		// Если входящая нода не работает, то нет смысла отправлять запрос на смену вывода,
+		// т.к. node не запущена, достаточно сменить выход в памяти.
+		inRuntimeName := buildRuntimeName(p.planName, inNode.Name)
+		if _, isInRunning := telemetry[inRuntimeName]; !isInRunning {
+			p.logger.Debugf("plan %s: in node %s disabled, changing in-memory %s -> %s", p.planName, inNode.Name, oldNodeAddr, newNodeAddr)
+
+			oldAddrIndex := util.FindStringIndex(inNode.Out, oldNodeAddr)
+			inNode.Out[oldAddrIndex] = newNodeAddr
+			continue
+		}
+
 		// Пытаемся обновить выходы в вечном retry, так как транзакций нет,
 		// а частичный запуск мы не хотим.
 		retryConfig := &util.RetryConfig{Count: 0, Delay: p.cfg.RetryDelay}
@@ -170,10 +230,9 @@ func (p *Plan) fixAction(ctx context.Context, actionIndex int) error {
 		inNode.Out[oldAddrIndex] = newNodeAddr
 	}
 
-	p.planNodesMutex.Lock()
+	p.plan.planNames[planNode.Name] = planNode
 	p.plan.nodes[actionIndex] = planNode
 	p.plan.planAddrIndexes[actionIndex] = newAddrIndex
-	p.planNodesMutex.Unlock()
 	return nil
 }
 

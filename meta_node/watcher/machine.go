@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/GDVFox/gostreaming/meta_node/planner"
 	"github.com/GDVFox/gostreaming/util"
+	"github.com/GDVFox/gostreaming/util/httplib"
 	"github.com/GDVFox/gostreaming/util/message"
 	"github.com/pkg/errors"
 )
@@ -142,9 +144,13 @@ func (m *Machine) sendCommand(url string, cmd interface{}) error {
 	if resp.StatusCode == http.StatusNoContent {
 		return nil
 	}
-
 	if resp.StatusCode == http.StatusNotFound {
 		return ErrNoAction
 	}
-	return ErrMachineError
+
+	machineError := &httplib.ErrorBody{}
+	if err := json.NewDecoder(resp.Body).Decode(machineError); err != nil {
+		return fmt.Errorf("can not decode error response %s: %w", err.Error(), ErrMachineError)
+	}
+	return fmt.Errorf("machine error %s: %w", machineError.Message, ErrMachineError)
 }

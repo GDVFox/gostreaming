@@ -15,5 +15,5 @@ func Ping(r *http.Request) (*httplib.Response, error) {
 	if err != nil {
 		return httplib.NewInternalErrorResponse(httplib.NewErrorBody(BadTelemetry, err.Error())), nil
 	}
-	return httplib.NewOKResponse(schemeData, true), nil
+	return httplib.NewOKResponse(schemeData, httplib.ContentTypeJSON), nil
 }

@@ -66,7 +66,7 @@ func newPlanWatcher(l *util.Logger, cfg *PlanWatcherConfig) (*PlanWatcher, error
 
 func (w *PlanWatcher) run(ctx context.Context) {
 	w.ctx = ctx
-	w.machineWatcher.run(ctx)
+	<-ctx.Done()
 
 	w.plansWG.Wait()
 }
@@ -116,6 +116,18 @@ func (w *PlanWatcher) RunPlan(p *planner.Plan) error {
 	return nil
 }
 
+// GetPlanTelemetry возвращает телеметрию плана.
+func (w *PlanWatcher) GetPlanTelemetry(planName string) (*PlanTelemetry, error) {
+	w.plansInWorkMutex.Lock()
+	defer w.plansInWorkMutex.Unlock()
+
+	plan, ok := w.plansInWork[planName]
+	if !ok {
+		return nil, ErrUnknownPlan
+	}
+	return plan.plan.GetTelemetry(), nil
+}
+
 // StopPlan останавливает работу плана.
 func (w *PlanWatcher) StopPlan(planName string) error {
 	w.plansInWorkMutex.Lock()
@@ -135,4 +147,16 @@ func (w *PlanWatcher) StopPlan(planName string) error {
 
 	w.logger.Infof("plan %s stopped", planName)
 	return nil
+}
+
+// WorkingPlans возвращает map работающих в данный момент планов.
+func (w *PlanWatcher) WorkingPlans() map[string]struct{} {
+	w.plansInWorkMutex.Lock()
+	defer w.plansInWorkMutex.Unlock()
+
+	plans := make(map[string]struct{}, len(w.plansInWork))
+	for planName := range w.plansInWork {
+		plans[planName] = struct{}{}
+	}
+	return plans
 }

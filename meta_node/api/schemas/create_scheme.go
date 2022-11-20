@@ -34,7 +34,7 @@ func CreateScheme(r *http.Request) (*httplib.Response, error) {
 		return httplib.NewInternalErrorResponse(httplib.NewErrorBody(common.ETCDErrorCode, err.Error())), nil
 	}
 
-	return httplib.NewOKResponse(nil, false), nil
+	return httplib.NewOKResponse(nil, httplib.ContentTypeRaw), nil
 }
 
 func buildPlan(scheme *planner.Scheme) (*planner.Plan, error) {

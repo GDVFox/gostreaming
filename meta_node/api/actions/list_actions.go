@@ -27,5 +27,5 @@ func ListActions(r *http.Request) (*httplib.Response, error) {
 		return httplib.NewInternalErrorResponse(httplib.NewErrorBody(common.BadActionErrorCode, err.Error())), nil
 	}
 
-	return httplib.NewOKResponse(actionsData, true), nil
+	return httplib.NewOKResponse(actionsData, httplib.ContentTypeJSON), nil
 }
