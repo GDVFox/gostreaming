@@ -50,15 +50,17 @@ func main() {
 	cfg := &metaclient.MetaNodeClientConfig{Address: os.Args[1]}
 	metaclient.OpenMetaNodeClient(cfg)
 
-	arguments := os.Args[2:]
-	switch Category(arguments[0]) {
+	args := os.Args[2:]
+	switch Category(args[0]) {
 	case SchemasCatergory:
-		schemas.HandleSchemas(arguments)
+		schemas.HandleSchemas(args)
 	case ActionsCategory:
-		actions.HandleActions(arguments)
+		actions.HandleActions(args)
 	case HelpCategory:
 		help.HandleHelp()
 	case AboutCategory:
 		about.HandleAbout()
+	default:
+		pterm.Error.Printfln("Unknown category '%s', run 'gostreaming %s help' for more information", args[0], metaclient.MetaNodeAddress)
 	}
 }

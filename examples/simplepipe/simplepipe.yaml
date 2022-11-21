@@ -1,0 +1,22 @@
+name: simplepipe
+nodes:
+    - name: numgen
+      action: numgen
+      addresses:
+        - host: 127.0.0.1
+          port: 9191
+      args:
+        - --freq=1000
+      env: {}
+    - name: printer
+      action: printer
+      addresses:
+        - host: 127.0.0.1
+          port: 9292
+        - host: 127.0.0.1
+          port: 9393
+      args:
+        - --port=12012
+      env:
+        SECRET_KEY: please
+dataflow: numgen ; printer
