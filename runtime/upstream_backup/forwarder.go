@@ -102,6 +102,7 @@ func NewDefaultForwarder(name string, outs []string, cfg *DefaultForwarderConfig
 
 // Run запускает Forwarder и блокируется.
 func (f *DefaultForwarder) Run(ctx context.Context) error {
+	defer logs.Logger.Debugf("forwarder: stopped")
 	defer close(f.upstreamAcks)
 	defer f.forwardLog.Close()
 	defer f.downstreamWG.Wait()

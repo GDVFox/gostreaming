@@ -1,9 +1,9 @@
 package main
 
 import (
+	"encoding/binary"
 	"flag"
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/GDVFox/gostreaming/lib/go-actionlib"
@@ -21,7 +21,9 @@ func main() {
 	flag.Parse()
 
 	for i := 1; ; i++ {
-		data := []byte(strconv.Itoa(i))
+		data := make([]byte, 4)
+		binary.BigEndian.PutUint32(data, uint32(i))
+
 		if err := actionlib.WriteMessage(data); err != nil {
 			actionlib.WriteError(fmt.Errorf("write size error: %w", err))
 		}

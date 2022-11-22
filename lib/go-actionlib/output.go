@@ -21,8 +21,7 @@ func WriteMessage(message []byte) error {
 	return nil
 }
 
-// AckMessage method required to acknowledge the message in the sink component.
-// In the case where the action skips the message AckMessage() call is not necessary.
+// AckMessage method required to acknowledge the message without sending data.
 func AckMessage() error {
 	if err := binary.Write(stdout, binary.BigEndian, uint32(0)); err != nil {
 		return fmt.Errorf("write ACK error: %w", err)

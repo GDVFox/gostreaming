@@ -56,7 +56,6 @@ func newBroadcater(port int) (*broadcaster, error) {
 }
 
 func (b *broadcaster) run(dataCh chan []byte) error {
-
 	wg, ctx := errgroup.WithContext(context.Background())
 	wg.Go(func() error {
 		return b.accpetLoop()

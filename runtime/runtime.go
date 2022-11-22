@@ -47,7 +47,12 @@ func NewRuntime(path string, isSource, isSink bool, in *upstreambackup.DefaiultR
 
 // Run запускает действие.
 func (a *Runtime) Run(ctx context.Context) error {
-	wg, runCtx := errgroup.WithContext(ctx)
+	defer logs.Logger.Debugf("runtime: runtime stopped")
+
+	cancelableCtx, runtimeCancel := context.WithCancel(ctx)
+	defer runtimeCancel()
+
+	wg, runCtx := errgroup.WithContext(cancelableCtx)
 	runActionCommand := exec.CommandContext(runCtx, a.path, a.opt.Args...)
 	runActionCommand.Env = os.Environ()
 	runActionCommand.Env = append(runActionCommand.Env, a.opt.EnvAsSlice()...)
@@ -80,27 +85,34 @@ func (a *Runtime) Run(ctx context.Context) error {
 	logs.Logger.Infof("action started with command: %s", runActionCommand.String())
 
 	wg.Go(func() error {
+		defer runtimeCancel()
 		return a.handleOut(runCtx, outCmd)
 	})
 	wg.Go(func() error {
+		defer runtimeCancel()
 		return a.handleErr(runCtx, errCmd)
 	})
 	wg.Go(func() error {
+		defer runtimeCancel()
 		return a.handleIn(runCtx, inCmd)
 	})
 	wg.Go(func() error {
+		defer runtimeCancel()
 		return a.handleAcks(runCtx)
 	})
 	wg.Go(func() error {
+		defer runtimeCancel()
 		return a.forwarder.Run(runCtx)
 	})
 	wg.Go(func() error {
+		defer runtimeCancel()
 		return a.receiver.Run(runCtx)
 	})
 	if err := wg.Wait(); err != nil {
 		return fmt.Errorf("action io got error: %w", err)
 	}
 
+	logs.Logger.Debugf("runtime: waiting command end")
 	// Если input/output завершился, то ждем окончания работы действия.
 	if err := runActionCommand.Wait(); err != nil {
 		exitErr, ok := err.(*exec.ExitError)
@@ -151,7 +163,12 @@ func (a *Runtime) handleIn(ctx context.Context, cmdIn io.WriteCloser) error {
 
 			logs.Logger.Debugf("runtime: got input data from input %d with number %d", msg.InputID, msg.Header.MessageID)
 
-			a.messagesQueue <- msg
+			select {
+			case <-ctx.Done():
+				return nil
+			case a.messagesQueue <- msg:
+			}
+
 			if err := binary.Write(cmdWriter, binary.BigEndian, msg.Header.MessageLength); err != nil {
 				return fmt.Errorf("can not write message length: %w", err)
 			}
@@ -170,9 +187,6 @@ func (a *Runtime) handleErr(ctx context.Context, cmdErr io.Reader) error {
 	for {
 		n, err := cmdErr.Read(errData)
 		if err != nil {
-			if err == io.EOF {
-				return nil
-			}
 			return fmt.Errorf("can not read stderr data: %w", err)
 		}
 		logs.Logger.Errorf("got error from action: %s", string(errData[:n]))
@@ -187,15 +201,20 @@ func (a *Runtime) handleOut(ctx context.Context, cmdOut io.Reader) error {
 		// Сообщение, из которого будет получено ожидаемый выход.
 		inputMsg := upstreambackup.DummyUpstreamMessage
 		if !a.isSource {
-			inputMsg = <-a.messagesQueue
+			var ok bool
+			select {
+			case <-ctx.Done():
+				return nil
+			case inputMsg, ok = <-a.messagesQueue:
+				if inputMsg == nil && !ok {
+					return nil
+				}
+			}
 		}
 		// В этом месте ждем, что при отключении писатель, т.е. действие,
 		// закроет io.Reader и разблокирует нас.
 		messsageLength := uint32(0)
 		if err := binary.Read(cmdOut, binary.BigEndian, &messsageLength); err != nil {
-			if err == io.EOF {
-				return nil
-			}
 			return fmt.Errorf("can not read message length: %w", err)
 		}
 
@@ -228,6 +247,8 @@ func (a *Runtime) handleOut(ctx context.Context, cmdOut io.Reader) error {
 }
 
 func (a *Runtime) handleAcks(ctx context.Context) error {
+	defer logs.Logger.Debugf("runtime: handle ACK stopped")
+
 	acks := a.receiver.Acks()
 	defer close(acks)
 

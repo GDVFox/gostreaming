@@ -101,6 +101,7 @@ func main() {
 
 	wg, runCtx := errgroup.WithContext(ctx)
 	wg.Go(func() error {
+		defer cancel() // завершение runtime должно завершать все.
 		return runtime.Run(runCtx)
 	})
 	wg.Go(func() error {

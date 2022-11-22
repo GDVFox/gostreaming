@@ -53,9 +53,9 @@ func main() {
 	r := mux.NewRouter().PathPrefix("/v1").Subrouter()
 
 	r.HandleFunc("/actions", httplib.CreateHandler(actions.ListActions, logger)).Methods(http.MethodGet)
-	r.HandleFunc("/actions/{action_name:[a-zA-z0-9]+}", httplib.CreateHandler(actions.GetAction, logger)).Methods(http.MethodGet)
+	r.HandleFunc("/actions/{action_name:[a-zA-z0-9\\-]+}", httplib.CreateHandler(actions.GetAction, logger)).Methods(http.MethodGet)
 	r.HandleFunc("/actions", httplib.CreateHandler(actions.CreateScheme, logger)).Methods(http.MethodPost)
-	r.HandleFunc("/actions/{action_name:[a-zA-z0-9]+}", httplib.CreateHandler(actions.DeleteAction, logger)).Methods(http.MethodDelete)
+	r.HandleFunc("/actions/{action_name:[a-zA-z0-9\\-]+}", httplib.CreateHandler(actions.DeleteAction, logger)).Methods(http.MethodDelete)
 
 	r.HandleFunc("/schemas", httplib.CreateHandler(schemas.ListSchemas, logger)).Methods(http.MethodGet)
 	r.HandleFunc("/schemas/{scheme_name:[a-zA-z0-9]+}", httplib.CreateHandler(schemas.GetScheme, logger)).Methods(http.MethodGet)

@@ -65,7 +65,7 @@ func NewDefaiultReceiver(addr string, inNames []string, cfg *DefaiultReceiverCon
 
 // Run запускает обработчик.
 func (r *DefaiultReceiver) Run(ctx context.Context) error {
-	defer logs.Logger.Debugf("receiver: stopped")
+	defer logs.Logger.Info("receiver: stopped")
 	defer close(r.messages)
 
 	receiverWG := &sync.WaitGroup{}
@@ -124,8 +124,6 @@ func (r *DefaiultReceiver) Run(ctx context.Context) error {
 	})
 
 	logs.Logger.Infof("receiver: waiting for new connections")
-	defer logs.Logger.Infof("receiver: stopped")
-
 	return wg.Wait()
 }
 

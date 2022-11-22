@@ -7,16 +7,22 @@ nodes:
           port: 9191
       args:
         - --freq=1000
-      env: {}
+    - name: filter
+      action: filter
+      addresses:
+        - host: 127.0.0.1
+          port: 9292
+      args:
+        - --mod=2
     - name: printer
       action: printer
       addresses:
         - host: 127.0.0.1
-          port: 9292
-        - host: 127.0.0.1
           port: 9393
+        - host: 127.0.0.1
+          port: 9494
       args:
         - --port=12012
       env:
         SECRET_KEY: please
-dataflow: numgen ; printer
+dataflow: numgen ; filter ; printer
