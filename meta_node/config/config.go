@@ -12,11 +12,14 @@ var Conf = NewConfig()
 
 // Config конфигурация сервиса.
 type Config struct {
-	HTTP       *httplib.HTTPConfig        `yaml:"http"`
-	Logging    *util.LoggingConfig        `yaml:"logging"`
-	ETCD       *storage.ETCDConfig        `yaml:"etcd"`
-	Watcher    *watcher.PlanWatcherConfig `yaml:"watcher"`
-	StaticPath string                     `yaml:"static-path"`
+	HTTP    *httplib.HTTPConfig        `yaml:"http"`
+	Logging *util.LoggingConfig        `yaml:"logging"`
+	ETCD    *storage.ETCDConfig        `yaml:"etcd"`
+	Watcher *watcher.PlanWatcherConfig `yaml:"watcher"`
+	// StaticPath путь к файлам статики для отображения dashboard.
+	// Данный путь должен содержать абсолютный путь к
+	// к папке /gostreaming/meta_node/static
+	StaticPath string `yaml:"static-path"`
 }
 
 // NewConfig создает конфиг с настройками по-умолчанию

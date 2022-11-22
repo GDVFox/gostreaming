@@ -8,7 +8,7 @@ import (
 	"github.com/GDVFox/gostreaming/util"
 )
 
-// HTTPConfig настройки для работы http сервера.
+// HTTPConfig настройки для работы встроенного http сервера.
 type HTTPConfig struct {
 	Host string `yaml:"host"`
 	Port int    `yaml:"port"`
@@ -17,7 +17,7 @@ type HTTPConfig struct {
 // NewtHTTPConfig создает HTTPConfig с настройками по-умолчанию.
 func NewtHTTPConfig() *HTTPConfig {
 	return &HTTPConfig{
-		Host: "127.0.0.1",
+		Host: "0.0.0.0",
 		Port: 8080,
 	}
 }

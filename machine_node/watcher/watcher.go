@@ -24,7 +24,10 @@ type workingRuntime struct {
 
 // Config набор настроек для Watcher
 type Config struct {
-	PingsToStop   int           `yaml:"pings-to-stop"`
+	// PingsToStop количество неудачных ping запросов,
+	// после которых рантайм признается отказавшим.
+	PingsToStop int `yaml:"pings-to-stop"`
+	// PingFrequency время между запросами к рантаймам для получения состояния.
 	PingFrequency util.Duration `yaml:"ping-freq"`
 }
 

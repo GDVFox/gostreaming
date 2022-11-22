@@ -1,0 +1,25 @@
+http:
+  host: 0.0.0.0
+  port: 5555
+
+logging:
+  logfile: /var/log/meta_node/meta_node.log
+  level: info
+
+etcd:
+  endpoints: ['127.0.0.1:2379']
+  timeout: 1m
+  retry:
+    delay: 1s
+    count: 10
+
+watcher:
+  ping-freq: 3s
+  retry-delay: 1s
+  machine-watcher:
+    machines:
+      - host: "127.0.0.1"
+        port: 8181
+        timeout: 30s
+
+static-path: /gostreaming/meta_node/static

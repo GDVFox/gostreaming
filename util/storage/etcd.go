@@ -29,7 +29,7 @@ type ETCDConfig struct {
 func NewETCDConfig() *ETCDConfig {
 	return &ETCDConfig{
 		Endpoints: []string{},
-		Timeout:   util.Duration(1 * time.Second),
+		Timeout:   util.Duration(1 * time.Minute),
 		Retry:     util.NewRetryConfig(),
 	}
 }

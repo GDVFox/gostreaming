@@ -1,28 +1,42 @@
 name: simplepipe
 nodes:
     - name: numgen
-      action: numgen
+      action: num_gen
       addresses:
         - host: 127.0.0.1
           port: 9191
       args:
-        - --freq=1000
-    - name: filter
+        - --freq=10
+    - name: filter2
       action: filter
       addresses:
         - host: 127.0.0.1
           port: 9292
       args:
         - --mod=2
-    - name: printer
-      action: printer
+    - name: filter3
+      action: filter
       addresses:
         - host: 127.0.0.1
           port: 9393
+      args:
+        - --mod=3
+    - name: printer2
+      action: printer
+      addresses:
         - host: 127.0.0.1
           port: 9494
       args:
         - --port=12012
       env:
         SECRET_KEY: please
-dataflow: numgen ; filter ; printer
+    - name: printer6
+      action: printer
+      addresses:
+        - host: 127.0.0.1
+          port: 9595
+      args:
+        - --port=16016
+      env:
+        SECRET_KEY: please
+dataflow: numgen ; filter2 ; (printer2 || (filter3 ; printer6))

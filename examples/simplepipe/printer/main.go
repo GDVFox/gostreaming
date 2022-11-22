@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/binary"
 	"flag"
 	"fmt"
 	"net"
@@ -21,7 +22,7 @@ func init() {
 	flag.IntVar(&port, "port", 0, "Port of tcp server")
 }
 
-func runReadLoop(dataCh chan []byte) {
+func runReadLoop(dataCh chan uint32) {
 	defer close(dataCh)
 
 	for {
@@ -29,7 +30,8 @@ func runReadLoop(dataCh chan []byte) {
 		if err != nil {
 			actionlib.WriteFatal(err)
 		}
-		dataCh <- data
+		num := binary.BigEndian.Uint32(data)
+		dataCh <- num
 		if err := actionlib.AckMessage(); err != nil {
 			actionlib.WriteFatal(err)
 		}
@@ -55,7 +57,7 @@ func newBroadcater(port int) (*broadcaster, error) {
 	}, nil
 }
 
-func (b *broadcaster) run(dataCh chan []byte) error {
+func (b *broadcaster) run(dataCh chan uint32) error {
 	wg, ctx := errgroup.WithContext(context.Background())
 	wg.Go(func() error {
 		return b.accpetLoop()
@@ -82,20 +84,21 @@ func (b *broadcaster) accpetLoop() error {
 	}
 }
 
-func (b *broadcaster) transmitLoop(ctx context.Context, dataCh chan []byte) error {
+func (b *broadcaster) transmitLoop(ctx context.Context, dataCh chan uint32) error {
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
 		case data, ok := <-dataCh:
-			if data == nil && !ok {
+			if data == 0 && !ok {
 				return nil
 			}
 
+			row := []byte(strconv.Itoa(int(data)))
 			b.connsMutex.Lock()
 			i := 0
 			for _, conn := range b.conns {
-				_, err := conn.Write(append(data, '\n'))
+				_, err := conn.Write(append(row, '\n'))
 				if err != nil {
 					conn.Close()
 					continue
@@ -119,7 +122,7 @@ func main() {
 		panic("secret key is unknown")
 	}
 
-	dataCh := make(chan []byte)
+	dataCh := make(chan uint32)
 	go runReadLoop(dataCh)
 
 	b, err := newBroadcater(port)

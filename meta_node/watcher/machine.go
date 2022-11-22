@@ -33,8 +33,13 @@ var (
 
 // MachineConfig настройки машины, на котором запущен machine_node
 type MachineConfig struct {
-	Host    string        `yaml:"host"`
-	Port    int           `yaml:"port"`
+	// Host хост, на котором машина ожидает подключения.
+	Host string `yaml:"host"`
+	// Post сервисный порт машины, который используется
+	// для передачи команд от meta_node и возврата статистики выше.
+	Port int `yaml:"port"`
+	// Timeout время, по истечению которого в случае отсутствия ответа
+	// машина признается не работающей и начинается процесс восстановления.
 	Timeout util.Duration `yaml:"timeout"`
 }
 

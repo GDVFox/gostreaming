@@ -3,7 +3,6 @@ package watcher
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/GDVFox/gostreaming/meta_node/planner"
 	"github.com/GDVFox/gostreaming/util"
@@ -19,15 +18,15 @@ var (
 
 // MachineWatcherConfig набор настроек для Watcher
 type MachineWatcherConfig struct {
-	PingFrequency util.Duration    `yaml:"ping-freq"`
-	Machines      []*MachineConfig `yaml:"machines"`
+	// Machines список доступных машин, которые будет опрашивать
+	// machine_watcher и параметры подключения к ним.
+	Machines []*MachineConfig `yaml:"machines"`
 }
 
 // NewMachineWatcherConfig возвращает MachineWatcherConfig с настройками по умолчанию.
 func NewMachineWatcherConfig() *MachineWatcherConfig {
 	return &MachineWatcherConfig{
-		PingFrequency: util.Duration(5 * time.Second),
-		Machines:      make([]*MachineConfig, 0),
+		Machines: make([]*MachineConfig, 0),
 	}
 }
 

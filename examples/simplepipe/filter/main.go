@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/binary"
 	"flag"
-	"strconv"
 
 	"github.com/GDVFox/gostreaming/lib/go-actionlib"
 )
@@ -23,6 +22,7 @@ func main() {
 		data, err := actionlib.ReadMessage()
 		if err != nil {
 			actionlib.WriteError(err)
+			continue
 		}
 
 		number := binary.BigEndian.Uint32(data)
@@ -31,9 +31,9 @@ func main() {
 			continue
 		}
 
-		outputData := []byte(strconv.Itoa(int(number)))
-		if err := actionlib.WriteMessage(outputData); err != nil {
+		if err := actionlib.WriteMessage(data); err != nil {
 			actionlib.WriteError(err)
+			continue
 		}
 	}
 

@@ -23,8 +23,16 @@ type workingPlan struct {
 
 // PlanWatcherConfig набор параметров для PlanWatcher.
 type PlanWatcherConfig struct {
-	PingFrequency  util.Duration         `yaml:"ping-freq"`
-	RetryDelay     util.Duration         `yaml:"retry-delay"`
+	// PingFrequency время между запросами к машинам для получения
+	// информации о состоянии машин и запущенных на них рантаймов.
+	PingFrequency util.Duration `yaml:"ping-freq"`
+	// RetryDelay задержка между попытками применения запросов
+	// на восстановление узла, количество попыток не указывается,
+	// так как watcher отправляет запросы бесконечно, пока узел
+	// не восстановится, либо не прекратится работа watcher.
+	RetryDelay util.Duration `yaml:"retry-delay"`
+	// MachineWatcher набор настроек для watcher, который
+	// следит за состоянием машин.
 	MachineWatcher *MachineWatcherConfig `yaml:"machine-watcher"`
 }
 

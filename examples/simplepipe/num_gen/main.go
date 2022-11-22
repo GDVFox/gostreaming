@@ -26,6 +26,7 @@ func main() {
 
 		if err := actionlib.WriteMessage(data); err != nil {
 			actionlib.WriteError(fmt.Errorf("write size error: %w", err))
+			continue
 		}
 
 		time.Sleep(time.Duration(int64(time.Millisecond) * freq))
