@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/GDVFox/gostreaming/runtime/logs"
+	"github.com/GDVFox/gostreaming/util"
 )
 
 // Forwarder объект для регистрации сообщений от действия, передачи их дальше по потоку,
@@ -19,6 +19,11 @@ type Forwarder interface {
 	AckMessages() <-chan UpstreamAck
 }
 
+// FakeForwarderConfig набор параметров для FakeForwarder.
+type FakeForwarderConfig struct {
+	ACKPeriod time.Duration
+}
+
 // FakeForwarder специальный Forwarder для действий, которые являются стоками.
 type FakeForwarder struct {
 	inputMaxsMutex sync.Mutex
@@ -26,14 +31,17 @@ type FakeForwarder struct {
 
 	upstreamAcks chan UpstreamAck
 	ackTicker    *time.Ticker
+
+	logger *util.Logger
 }
 
 // NewFakeForwarder создает новый объект FakeForwarder.
-func NewFakeForwarder() *FakeForwarder {
+func NewFakeForwarder(cfg *FakeForwarderConfig, l *util.Logger) *FakeForwarder {
 	return &FakeForwarder{
 		inputMaxs:    make(UpstreamAck),
 		upstreamAcks: make(chan UpstreamAck),
-		ackTicker:    time.NewTicker(10 * time.Second), // TODO: config
+		ackTicker:    time.NewTicker(cfg.ACKPeriod),
+		logger:       l.WithName("fake_logger"),
 	}
 }
 
@@ -64,7 +72,7 @@ func (f *FakeForwarder) Forward(inputID uint16, inputMsgID uint32, data []byte) 
 	}
 
 	f.inputMaxs[inputID] = inputMsgID
-	logs.Logger.Debugf("fake_forwarder: register message %d from input %d done", inputMsgID, inputID)
+	f.logger.Debugf("register message %d from input %d done", inputMsgID, inputID)
 	return nil
 }
 
@@ -79,7 +87,7 @@ func (f *FakeForwarder) trimLoop(ctx context.Context) error {
 		case <-ctx.Done():
 			return nil
 		case <-f.ackTicker.C:
-			logs.Logger.Debugf("forwarder: starting trim forward log")
+			f.logger.Debug("starting trim forward log")
 
 			f.inputMaxsMutex.Lock()
 			inputMaxs := f.inputMaxs
@@ -87,11 +95,11 @@ func (f *FakeForwarder) trimLoop(ctx context.Context) error {
 			f.inputMaxsMutex.Unlock()
 
 			if len(inputMaxs) == 0 {
-				logs.Logger.Debugf("forwarder: nothing to trim")
+				f.logger.Debug("nothing to trim")
 				continue
 			}
 
-			logs.Logger.Debugf("forwarder: got upstreams for ACK: %s", inputMaxs)
+			f.logger.Debugf("got upstreams for ACK: %s", inputMaxs)
 
 			select {
 			case <-ctx.Done():

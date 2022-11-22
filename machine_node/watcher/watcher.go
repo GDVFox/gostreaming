@@ -53,7 +53,7 @@ func newWatcher(l *util.Logger, cfg *Config) *Watcher {
 	return &Watcher{
 		runtimes: make(map[string]*workingRuntime),
 		cfg:      cfg,
-		logger:   l,
+		logger:   l.WithName("watcher"),
 	}
 }
 
@@ -70,10 +70,13 @@ func (w *Watcher) StartRuntime(ctx context.Context, r *Runtime) error {
 	if _, ok := w.runtimes[runtimeName]; ok {
 		return ErrRuntimeAlreadyRegistered
 	}
+
 	w.runtimes[runtimeName] = &workingRuntime{
 		runtime:     r,
 		pingsFailed: 0,
 	}
+
+	w.logger.Infof("runtime '%s' started", runtimeName)
 	return nil
 }
 
@@ -89,7 +92,12 @@ func (w *Watcher) StopRuntime(schemeName, actionName string) error {
 	}
 	delete(w.runtimes, runtimeName)
 
-	return runtime.runtime.Stop()
+	if err := runtime.runtime.Stop(); err != nil {
+		return err
+	}
+
+	w.logger.Infof("runtime '%s' stopped", runtimeName)
+	return nil
 }
 
 // ChangeOutRuntime изменяет один из выходных потоков рантайма.
@@ -103,7 +111,12 @@ func (w *Watcher) ChangeOutRuntime(schemeName, actionName, oldOut, newOut string
 		return ErrUnknownRuntime
 	}
 
-	return runtime.runtime.ChangeOut(oldOut, newOut)
+	if err := runtime.runtime.ChangeOut(oldOut, newOut); err != nil {
+		return err
+	}
+
+	w.logger.Infof("runtime '%s' changed out %s -> %s", runtimeName, oldOut, newOut)
+	return nil
 }
 
 // GetRuntimesTelemetry возвращает информацию о состояниях действий.
@@ -128,11 +141,16 @@ func (w *Watcher) GetRuntimesTelemetry() []*message.RuntimeTelemetry {
 		runtimes = append(runtimes, telemetry)
 	}
 
+	// Здесь Debugf, так как этот метод вызывается на каждый ping от meta_node.
+	w.logger.Debugf("telemetry for %d runtimes loaded", len(runtimes))
 	return runtimes
 }
 
 // Start запускает Watcher в работу и выходит
 func (w *Watcher) run(ctx context.Context) {
+	w.logger.Info("watcher started")
+	defer w.logger.Info("watcher stopped")
+
 	ticker := time.NewTicker(time.Duration(w.cfg.PingFrequency))
 	for {
 		select {
@@ -145,10 +163,11 @@ func (w *Watcher) run(ctx context.Context) {
 }
 
 func (w *Watcher) pingRuntimes() {
+	defer w.logger.Debugf("ping runtimes done")
+
 	w.runtimesMutex.RLock()
 	defer w.runtimesMutex.RUnlock()
 
-	w.logger.Debugf("started ping runtimes")
 	for runtimeName, runtime := range w.runtimes {
 		telemetry, err := runtime.runtime.Ping()
 		if err != nil {
@@ -170,5 +189,4 @@ func (w *Watcher) pingRuntimes() {
 		runtime.oldestOutput = telemetry.OldestOutput
 		runtime.pingsFailed = 0
 	}
-	w.logger.Debugf("ping runtimes done")
 }

@@ -8,7 +8,7 @@ import (
 
 	"github.com/GDVFox/ctxio"
 	"github.com/GDVFox/gostreaming/runtime/external"
-	"github.com/GDVFox/gostreaming/runtime/logs"
+	"github.com/GDVFox/gostreaming/util"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -45,21 +45,23 @@ type UpstreamReceiver struct {
 	connWriter *ctxio.ContextWriter
 
 	output chan *UpstreamMessage
+	logger *util.Logger
 }
 
 // NewUpstreamReceiver создает новый UpstreamReceiver.
-func NewUpstreamReceiver(upstreamIndex uint16, name string, tcpConn *external.TCPConnection, cfg *UpstreamReceiverConfig) *UpstreamReceiver {
+func NewUpstreamReceiver(upstreamIndex uint16, name string, tcpConn *external.TCPConnection, cfg *UpstreamReceiverConfig, l *util.Logger) *UpstreamReceiver {
 	return &UpstreamReceiver{
 		upstreamIndex: upstreamIndex,
 		name:          name,
 		conn:          tcpConn,
 		output:        make(chan *UpstreamMessage),
+		logger:        l.WithName("upstream_receiver " + name),
 	}
 }
 
 // Run запускает UpstreamReceiver и блокируется.
 func (r *UpstreamReceiver) Run(ctx context.Context) error {
-	defer logs.Logger.Debugf("upstream_receiver %s: stopped", r.name)
+	defer r.logger.Info("upstream stopped")
 	defer close(r.output)
 
 	wg, upstreamCtx := errgroup.WithContext(ctx)
@@ -75,6 +77,8 @@ func (r *UpstreamReceiver) Run(ctx context.Context) error {
 }
 
 func (r *UpstreamReceiver) receivingLoop(ctx context.Context) error {
+	defer r.logger.Info("receiving loop done")
+
 	connReader := ctxio.NewContextReader(ctx, r.conn)
 	defer connReader.Close()
 

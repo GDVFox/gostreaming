@@ -69,6 +69,7 @@ type RuntimeOptions struct {
 
 	RuntimePath      string
 	RuntimeLogsDir   string
+	RuntimeLogsLevel string
 	ActionStartRetry *util.RetryConfig
 }
 
@@ -94,13 +95,14 @@ type Runtime struct {
 
 // NewRuntime создает новое действие.
 func NewRuntime(schemeName, actionName string, bin []byte, l *util.Logger, opt *RuntimeOptions) *Runtime {
+	runtimeName := buildRuntimeName(schemeName, actionName)
 	return &Runtime{
-		name:       buildRuntimeName(schemeName, actionName),
+		name:       runtimeName,
 		schemeName: schemeName,
 		actionName: actionName,
 		bin:        bin,
 		opt:        opt,
-		logger:     l,
+		logger:     l.WithName("runtime " + runtimeName),
 	}
 }
 
@@ -126,7 +128,7 @@ func (r *Runtime) Start(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("can not create binary: %w", err)
 	}
-	r.logger.Debugf("created tmp binary with path %s", r.binPath)
+	r.logger.Infof("created tmp binary with path %s", r.binPath)
 
 	actionOptions, err := json.Marshal(r.opt.ActionOptions)
 	if err != nil {
@@ -143,7 +145,7 @@ func (r *Runtime) Start(ctx context.Context) error {
 		"--port="+strconv.Itoa(r.opt.Port),
 		"--service-sock="+r.serviceSockPath,
 		"--log-file="+logFileAddr,
-		"--log-level=debug",
+		"--log-level="+r.opt.RuntimeLogsLevel,
 		"--in="+strings.Join(r.opt.In, ","),
 		"--out="+strings.Join(r.opt.Out, ","),
 		"--action-opt="+string(actionOptions),
@@ -157,11 +159,12 @@ func (r *Runtime) Start(ctx context.Context) error {
 	if err := r.cmd.Start(); err != nil {
 		return fmt.Errorf("can not start action: %w", err)
 	}
-	r.logger.Debugf("runtime started with command: %s", r.cmd.String())
+	r.logger.Infof("runtime started with command: %s", r.cmd.String())
 
 	if err := r.connect(ctx); err != nil {
 		return fmt.Errorf("can not connect to action: %w", err)
 	}
+	r.logger.Info("service connection created")
 
 	return nil
 }
@@ -196,7 +199,6 @@ func (r *Runtime) connect(ctx context.Context) error {
 			return err
 		}
 
-		r.logger.Debug("start confirm received")
 		return nil
 	})
 	if dialErr != nil {
@@ -316,11 +318,13 @@ func (r *Runtime) Stop() error {
 	if err := r.cmd.Process.Signal(syscall.SIGTERM); err != nil {
 		return fmt.Errorf("can not send SIGTERM to runtime: %w", err)
 	}
+	r.logger.Info("SIGTERM sended")
 
 	state, err := r.cmd.Process.Wait()
 	if err != nil {
 		return fmt.Errorf("can not wait and of runtime process: %w", err)
 	}
+	r.logger.Info("Process stopped")
 
 	// успешное завершение процесса
 	if state.Success() {

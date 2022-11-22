@@ -61,3 +61,10 @@ func NewLogger(cfg *LoggingConfig) (*Logger, error) {
 		SugaredLogger: zap.New(core).Sugar(),
 	}, nil
 }
+
+// WithName добавляет имя в путь.
+func (l *Logger) WithName(name string) *Logger {
+	return &Logger{
+		SugaredLogger: l.SugaredLogger.Named(name),
+	}
+}

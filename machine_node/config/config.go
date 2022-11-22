@@ -25,6 +25,8 @@ type Config struct {
 	// RuntimeLogsDir путь к директории, в которой будут хранится логи
 	// запущенных рантаймов.
 	RuntimeLogsDir string `yaml:"runtime-logs-dir"`
+	// RuntimeLogsLevel уровень логирования в загруженных рантаймах
+	RuntimeLogsLevel string `yaml:"runtime-logs-level"`
 }
 
 // NewConfig создает конфиг с настройками по-умолчанию
@@ -37,5 +39,6 @@ func NewConfig() *Config {
 		ActionStartRetry: util.NewRetryConfig(),
 		RuntimePath:      "runtime",
 		RuntimeLogsDir:   "runtime-logs",
+		RuntimeLogsLevel: "info",
 	}
 }

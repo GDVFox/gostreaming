@@ -67,7 +67,7 @@ func newPlanWatcher(l *util.Logger, cfg *PlanWatcherConfig) (*PlanWatcher, error
 	return &PlanWatcher{
 		machineWatcher: machineWatcher,
 		plansInWork:    make(map[string]*workingPlan),
-		logger:         l,
+		logger:         l.WithName("plan_watcher"),
 		cfg:            cfg,
 	}, nil
 }
@@ -88,8 +88,6 @@ func (w *PlanWatcher) RunPlan(p *planner.Plan) error {
 		return ErrPlanAlreadyStarted
 	}
 
-	w.logger.Infof("starting plan %s", p.Name)
-
 	planConfig := &PlanConfig{
 		PingFrequency: w.cfg.PingFrequency,
 		RetryDelay:    w.cfg.RetryDelay,
@@ -98,6 +96,7 @@ func (w *PlanWatcher) RunPlan(p *planner.Plan) error {
 	if err := plan.StartNodes(w.ctx); err != nil {
 		return err
 	}
+	w.logger.Infof("plan '%s' started", p.Name)
 
 	planCtx, planStop := context.WithCancel(w.ctx)
 	wp := &workingPlan{
@@ -114,13 +113,13 @@ func (w *PlanWatcher) RunPlan(p *planner.Plan) error {
 		defer planStop()
 
 		if err := plan.RunProtection(planCtx); err != nil {
-			w.logger.Errorf("protection of plan %s failed: %s", plan.planName, err)
+			w.logger.Errorf("plan '%s' protection failed: %s", plan.planName, err)
 		}
 
-		w.logger.Debugf("protection of plan %s done", plan.planName)
+		w.logger.Infof("plan '%s' protection done", plan.planName)
 	}()
 
-	w.logger.Infof("plan %s started", p.Name)
+	w.logger.Infof("plan '%s' protection started", p.Name)
 	return nil
 }
 
@@ -146,14 +145,14 @@ func (w *PlanWatcher) StopPlan(planName string) error {
 		return ErrUnknownPlan
 	}
 
-	w.logger.Infof("stopping plan %s", planName)
+	w.logger.Infof("plan '%s' stopping", planName)
 
 	plan.stopPlan()
 	<-plan.done
 
 	delete(w.plansInWork, planName)
 
-	w.logger.Infof("plan %s stopped", planName)
+	w.logger.Infof("plan '%s' stopped", planName)
 	return nil
 }
 

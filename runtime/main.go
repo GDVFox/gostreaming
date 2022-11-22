@@ -15,8 +15,8 @@ import (
 
 	"github.com/GDVFox/gostreaming/runtime/config"
 	"github.com/GDVFox/gostreaming/runtime/external"
-	"github.com/GDVFox/gostreaming/runtime/logs"
 	upstreambackup "github.com/GDVFox/gostreaming/runtime/upstream_backup"
+	"github.com/GDVFox/gostreaming/util"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -38,7 +38,6 @@ func main() {
 
 	flag.Parse()
 	if err := config.Conf.Parse(); err != nil {
-		logs.Logger.Errorf("can not parse config arguments: %v", err)
 		fmt.Fprintf(os.Stderr, "can not parse config arguments: %v\n", err)
 		os.Exit(1)
 	}
@@ -49,8 +48,10 @@ func main() {
 	outConfig := external.NewTCPConnectionConfig()
 	outConfig.NoDelay = false
 
-	if err := logs.InitLogger(&config.Conf.Logger); err != nil {
-		logs.Logger.Errorf("can not init logger: %v", err)
+	// всегда чистим файлы в runtime.
+	config.Conf.Logger.TruncateFile = true
+	logger, err := util.NewLogger(&config.Conf.Logger)
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "can not init logger: %v\n", err)
 		os.Exit(1)
 	}
@@ -62,21 +63,24 @@ func main() {
 	defer signal.Stop(signalChannel)
 	go func() {
 		sig := <-signalChannel
-		logs.Logger.Infof("got signal: %s, stopping...", sig)
+		logger.Infof("got signal: %s, stopping...", sig)
 		cancel()
 	}()
 
-	receiverConfig := &upstreambackup.DefaiultReceiverConfig{
+	receiverConfig := &upstreambackup.DefaultReceiverConfig{
 		UpstreamConfig: &upstreambackup.UpstreamReceiverConfig{
 			AckBufferSize: 100,
 			TCPConfig:     inConfig,
 		},
 	}
-	receiver := upstreambackup.NewDefaiultReceiver(":"+strconv.Itoa(config.Conf.Port), config.Conf.In, receiverConfig)
+	receiver := upstreambackup.NewDefaultReceiver(":"+strconv.Itoa(config.Conf.Port), config.Conf.In, receiverConfig, logger)
 
 	var forwarder upstreambackup.Forwarder
 	if len(config.Conf.Out) == 0 {
-		forwarder = upstreambackup.NewFakeForwarder()
+		forwarderConfig := &upstreambackup.FakeForwarderConfig{
+			ACKPeriod: 5 * time.Second,
+		}
+		forwarder = upstreambackup.NewFakeForwarder(forwarderConfig, logger)
 	} else {
 		forwarderConfig := &upstreambackup.DefaultForwarderConfig{
 			ACKPeriod:     5 * time.Second,
@@ -86,9 +90,9 @@ func main() {
 				TCPConfig:          outConfig,
 			},
 		}
-		forwarder, err = upstreambackup.NewDefaultForwarder(config.Conf.Name, config.Conf.Out, forwarderConfig)
+		forwarder, err = upstreambackup.NewDefaultForwarder(config.Conf.Name, config.Conf.Out, forwarderConfig, logger)
 		if err != nil {
-			logs.Logger.Errorf("can not init forwarder: %v", err)
+			logger.Errorf("can not init forwarder: %v", err)
 			fmt.Fprintf(os.Stderr, "can not init forwarder: %v\n", err)
 			os.Exit(1)
 		}
@@ -96,8 +100,8 @@ func main() {
 
 	isSource := len(config.Conf.In) == 0
 	isSink := len(config.Conf.Out) == 0
-	runtime := NewRuntime(config.Conf.ActionPath, isSource, isSink, receiver, forwarder, config.Conf.ActionOptions)
-	serviceServer := NewServiceServer(config.Conf.ServiceSock, runtime)
+	runtime := NewRuntime(config.Conf.ActionPath, isSource, isSink, receiver, forwarder, config.Conf.ActionOptions, logger)
+	serviceServer := NewServiceServer(config.Conf.ServiceSock, runtime, logger)
 
 	wg, runCtx := errgroup.WithContext(ctx)
 	wg.Go(func() error {
@@ -108,11 +112,11 @@ func main() {
 		return serviceServer.Run(runCtx)
 	})
 
-	logs.Logger.Infof("runtime started for action: %s", config.Conf.ActionPath)
+	logger.Infof("runtime started for action: %s", config.Conf.ActionPath)
 	if err := wg.Wait(); err != nil && !errors.Is(err, net.ErrClosed) && !errors.Is(err, io.EOF) {
-		logs.Logger.Errorf("action run error: %v", err)
+		logger.Errorf("action run error: %v", err)
 		fmt.Fprintf(os.Stderr, "action run error: %v\n", err)
 		os.Exit(1)
 	}
-	logs.Logger.Infof("runtime stopped for action: %s", config.Conf.ActionPath)
+	logger.Infof("runtime stopped for action: %s", config.Conf.ActionPath)
 }

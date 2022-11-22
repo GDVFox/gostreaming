@@ -54,13 +54,14 @@ type Machine struct {
 
 // NewMachine содает новый объект Machine.
 func NewMachine(l *util.Logger, cfg *MachineConfig) *Machine {
+	addr := cfg.Host + ":" + strconv.Itoa(cfg.Port)
 	return &Machine{
 		client: &http.Client{
 			Timeout: time.Duration(cfg.Timeout),
 		},
-		addr:   cfg.Host + ":" + strconv.Itoa(cfg.Port),
+		addr:   addr,
 		cfg:    cfg,
-		logger: l,
+		logger: l.WithName("machine " + addr),
 	}
 }
 
@@ -87,6 +88,8 @@ func (m *Machine) Ping() ([]*message.RuntimeTelemetry, error) {
 
 // SendRunAction отправляет запрос для запуска действия на машине.
 func (m *Machine) SendRunAction(ctx context.Context, schemeName string, node *planner.NodePlan) error {
+	defer m.logger.Infof("sended run action '%s' for plan '%s'", node.Name, schemeName)
+
 	machineURL := &url.URL{
 		Scheme: runHTTPScheme,
 		Host:   m.addr,
@@ -107,6 +110,8 @@ func (m *Machine) SendRunAction(ctx context.Context, schemeName string, node *pl
 
 // SendStopAction отправляет запрос для остановки действия на машине.
 func (m *Machine) SendStopAction(ctx context.Context, schemeName string, node *planner.NodePlan) error {
+	defer m.logger.Infof("sended run stop '%s' for plan '%s'", node.Name, schemeName)
+
 	machineURL := &url.URL{
 		Scheme: runHTTPScheme,
 		Host:   m.addr,
@@ -121,6 +126,8 @@ func (m *Machine) SendStopAction(ctx context.Context, schemeName string, node *p
 
 // SendChangeOut отправляет запрос на изменение Out у действия.
 func (m *Machine) SendChangeOut(ctx context.Context, schemeName, actionName, oldOut, newOut string) error {
+	defer m.logger.Infof("sended change out for action '%s' for plan '%s'", actionName, schemeName)
+
 	machineURL := &url.URL{
 		Scheme: runHTTPScheme,
 		Host:   m.addr,

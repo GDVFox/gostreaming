@@ -13,8 +13,8 @@ import (
 
 	"github.com/GDVFox/ctxio"
 	"github.com/GDVFox/gostreaming/runtime/config"
-	"github.com/GDVFox/gostreaming/runtime/logs"
 	upstreambackup "github.com/GDVFox/gostreaming/runtime/upstream_backup"
+	"github.com/GDVFox/gostreaming/util"
 )
 
 // Runtime обертка над действием.
@@ -24,15 +24,16 @@ type Runtime struct {
 	isSource  bool
 	isSink    bool
 
-	receiver  *upstreambackup.DefaiultReceiver
+	receiver  *upstreambackup.DefaultReceiver
 	forwarder upstreambackup.Forwarder
 	opt       *config.ActionOptions
 
 	messagesQueue chan *upstreambackup.UpstreamMessage
+	logger        *util.Logger
 }
 
 // NewRuntime создает новый объект Runtime.
-func NewRuntime(path string, isSource, isSink bool, in *upstreambackup.DefaiultReceiver, out upstreambackup.Forwarder, opt *config.ActionOptions) *Runtime {
+func NewRuntime(path string, isSource, isSink bool, in *upstreambackup.DefaultReceiver, out upstreambackup.Forwarder, opt *config.ActionOptions, l *util.Logger) *Runtime {
 	return &Runtime{
 		path:          path,
 		isSource:      isSource,
@@ -42,20 +43,21 @@ func NewRuntime(path string, isSource, isSink bool, in *upstreambackup.DefaiultR
 		forwarder:     out,
 		opt:           opt,
 		messagesQueue: make(chan *upstreambackup.UpstreamMessage, 1),
+		logger:        l.WithName("runtime"),
 	}
 }
 
 // Run запускает действие.
-func (a *Runtime) Run(ctx context.Context) error {
-	defer logs.Logger.Debugf("runtime: runtime stopped")
+func (r *Runtime) Run(ctx context.Context) error {
+	defer r.logger.Info("runtime stopped")
 
 	cancelableCtx, runtimeCancel := context.WithCancel(ctx)
 	defer runtimeCancel()
 
 	wg, runCtx := errgroup.WithContext(cancelableCtx)
-	runActionCommand := exec.CommandContext(runCtx, a.path, a.opt.Args...)
+	runActionCommand := exec.CommandContext(runCtx, r.path, r.opt.Args...)
 	runActionCommand.Env = os.Environ()
-	runActionCommand.Env = append(runActionCommand.Env, a.opt.EnvAsSlice()...)
+	runActionCommand.Env = append(runActionCommand.Env, r.opt.EnvAsSlice()...)
 
 	inCmd, err := runActionCommand.StdinPipe()
 	if err != nil {
@@ -73,8 +75,8 @@ func (a *Runtime) Run(ctx context.Context) error {
 	}
 
 	// Выставляем флаг запуска, так как следующие операции будут асинхронно все запускать.
-	atomic.StoreUint32(&a.isRunning, 1)
-	defer atomic.StoreUint32(&a.isRunning, 0)
+	atomic.StoreUint32(&r.isRunning, 1)
+	defer atomic.StoreUint32(&r.isRunning, 0)
 
 	// Запускаем команду асинхронно, так как используем StdoutPipe, StderrPipe.
 	// Когда команда завершиться, то StdoutPipe, StderrPipe будут закрыты автоматически.
@@ -82,37 +84,37 @@ func (a *Runtime) Run(ctx context.Context) error {
 	if err := runActionCommand.Start(); err != nil {
 		return fmt.Errorf("can not start action: %w", err)
 	}
-	logs.Logger.Infof("action started with command: %s", runActionCommand.String())
+	r.logger.Infof("action started with command: %s", runActionCommand.String())
 
 	wg.Go(func() error {
 		defer runtimeCancel()
-		return a.handleOut(runCtx, outCmd)
+		return r.handleOut(runCtx, outCmd)
 	})
 	wg.Go(func() error {
 		defer runtimeCancel()
-		return a.handleErr(runCtx, errCmd)
+		return r.handleErr(runCtx, errCmd)
 	})
 	wg.Go(func() error {
 		defer runtimeCancel()
-		return a.handleIn(runCtx, inCmd)
+		return r.handleIn(runCtx, inCmd)
 	})
 	wg.Go(func() error {
 		defer runtimeCancel()
-		return a.handleAcks(runCtx)
+		return r.handleAcks(runCtx)
 	})
 	wg.Go(func() error {
 		defer runtimeCancel()
-		return a.forwarder.Run(runCtx)
+		return r.forwarder.Run(runCtx)
 	})
 	wg.Go(func() error {
 		defer runtimeCancel()
-		return a.receiver.Run(runCtx)
+		return r.receiver.Run(runCtx)
 	})
 	if err := wg.Wait(); err != nil {
 		return fmt.Errorf("action io got error: %w", err)
 	}
 
-	logs.Logger.Debugf("runtime: waiting command end")
+	r.logger.Debug("io done, waitring command end")
 	// Если input/output завершился, то ждем окончания работы действия.
 	if err := runActionCommand.Wait(); err != nil {
 		exitErr, ok := err.(*exec.ExitError)
@@ -129,44 +131,44 @@ func (a *Runtime) Run(ctx context.Context) error {
 }
 
 // IsRunning возвращает true, если действие сейчас работает и false иначе.
-func (a *Runtime) IsRunning() bool {
-	return atomic.LoadUint32(&a.isRunning) == 1
+func (r *Runtime) IsRunning() bool {
+	return atomic.LoadUint32(&r.isRunning) == 1
 }
 
 // ChangeOut заменяет отправку в oldOut на отправку в newOut.
-func (a *Runtime) ChangeOut(oldOut, newOut string) error {
-	return a.forwarder.ChangeOut(oldOut, newOut)
+func (r *Runtime) ChangeOut(oldOut, newOut string) error {
+	return r.forwarder.ChangeOut(oldOut, newOut)
 }
 
 // GetOldestOutput возвращает самый старый output_message_id, который хранится в логе.
-func (a *Runtime) GetOldestOutput() (uint32, error) {
-	return a.forwarder.GetOldestOutput()
+func (r *Runtime) GetOldestOutput() (uint32, error) {
+	return r.forwarder.GetOldestOutput()
 }
 
 // inCmd закроет handleIn, так как он писатель и может это делать по
 // https://golang.org/pkg/os/exec/#Cmd.StdinPipe
-func (a *Runtime) handleIn(ctx context.Context, cmdIn io.WriteCloser) error {
-	defer logs.Logger.Debug("runtime: handle STDIN stopped")
+func (r *Runtime) handleIn(ctx context.Context, cmdIn io.WriteCloser) error {
+	defer r.logger.Info("handle STDIN stopped")
 
 	cmdWriter := ctxio.NewContextWriter(ctx, cmdIn)
 	defer cmdWriter.Close()
-	defer close(a.messagesQueue)
+	defer close(r.messagesQueue)
 
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
-		case msg, ok := <-a.receiver.Messages():
+		case msg, ok := <-r.receiver.Messages():
 			if msg == nil && !ok {
 				return nil
 			}
 
-			logs.Logger.Debugf("runtime: got input data from input %d with number %d", msg.InputID, msg.Header.MessageID)
+			r.logger.Debugf("got input data from input %d with number %d", msg.InputID, msg.Header.MessageID)
 
 			select {
 			case <-ctx.Done():
 				return nil
-			case a.messagesQueue <- msg:
+			case r.messagesQueue <- msg:
 			}
 
 			if err := binary.Write(cmdWriter, binary.BigEndian, msg.Header.MessageLength); err != nil {
@@ -180,8 +182,8 @@ func (a *Runtime) handleIn(ctx context.Context, cmdIn io.WriteCloser) error {
 	}
 }
 
-func (a *Runtime) handleErr(ctx context.Context, cmdErr io.Reader) error {
-	defer logs.Logger.Debug("runtime: handle STDERR stopped")
+func (r *Runtime) handleErr(ctx context.Context, cmdErr io.Reader) error {
+	defer r.logger.Info("handle STDERR stopped")
 
 	errData := make([]byte, 4096)
 	for {
@@ -189,23 +191,22 @@ func (a *Runtime) handleErr(ctx context.Context, cmdErr io.Reader) error {
 		if err != nil {
 			return fmt.Errorf("can not read stderr data: %w", err)
 		}
-		logs.Logger.Errorf("got error from action: %s", string(errData[:n]))
+		r.logger.Errorf("STDERR: %s", string(errData[:n]))
 	}
 }
 
-func (a *Runtime) handleOut(ctx context.Context, cmdOut io.Reader) error {
-	defer logs.Logger.Debug("runtime: handle STDOUT stopped")
+func (r *Runtime) handleOut(ctx context.Context, cmdOut io.Reader) error {
+	defer r.logger.Info("handle STDOUT stopped")
 
 	for {
-		logs.Logger.Debug("runtime: waiting for new command out")
 		// Сообщение, из которого будет получено ожидаемый выход.
 		inputMsg := upstreambackup.DummyUpstreamMessage
-		if !a.isSource {
+		if !r.isSource {
 			var ok bool
 			select {
 			case <-ctx.Done():
 				return nil
-			case inputMsg, ok = <-a.messagesQueue:
+			case inputMsg, ok = <-r.messagesQueue:
 				if inputMsg == nil && !ok {
 					return nil
 				}
@@ -217,13 +218,14 @@ func (a *Runtime) handleOut(ctx context.Context, cmdOut io.Reader) error {
 		if err := binary.Read(cmdOut, binary.BigEndian, &messsageLength); err != nil {
 			return fmt.Errorf("can not read message length: %w", err)
 		}
+		r.logger.Debugf("got output data from action with length %d", messsageLength)
 
-		if a.isSink {
+		if r.isSink {
 			if _, err := io.CopyN(io.Discard, cmdOut, int64(messsageLength)); err != nil {
 				return fmt.Errorf("can not discard cmd out of sink: %w", err)
 			}
 
-			if err := a.forwarder.Forward(inputMsg.InputID, inputMsg.Header.MessageID, nil); err != nil {
+			if err := r.forwarder.Forward(inputMsg.InputID, inputMsg.Header.MessageID, nil); err != nil {
 				return fmt.Errorf("can not forward fake message: %w", err)
 			}
 		} else {
@@ -237,30 +239,29 @@ func (a *Runtime) handleOut(ctx context.Context, cmdOut io.Reader) error {
 				return fmt.Errorf("can not read message data: %w", err)
 			}
 
-			if err := a.forwarder.Forward(inputMsg.InputID, inputMsg.Header.MessageID, data); err != nil {
+			if err := r.forwarder.Forward(inputMsg.InputID, inputMsg.Header.MessageID, data); err != nil {
 				return fmt.Errorf("can not forward message: %w", err)
 			}
 		}
-
-		logs.Logger.Debugf("runtime: sended output data")
 	}
 }
 
-func (a *Runtime) handleAcks(ctx context.Context) error {
-	defer logs.Logger.Debugf("runtime: handle ACK stopped")
+func (r *Runtime) handleAcks(ctx context.Context) error {
+	defer r.logger.Info("handle ACK stopped")
 
-	acks := a.receiver.Acks()
+	acks := r.receiver.Acks()
 	defer close(acks)
 
 	for {
 		select {
 		case <-ctx.Done():
 			return nil
-		case ack, ok := <-a.forwarder.AckMessages():
+		case ack, ok := <-r.forwarder.AckMessages():
 			if ack == nil && !ok {
 				return nil
 			}
 
+			r.logger.Debugf("got ACK: %s", ack)
 			select {
 			case <-ctx.Done():
 				return nil

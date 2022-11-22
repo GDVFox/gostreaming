@@ -9,7 +9,7 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/GDVFox/gostreaming/runtime/logs"
+	"github.com/GDVFox/gostreaming/util"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -46,18 +46,22 @@ type ServiceServer struct {
 	runtime  *Runtime
 
 	sockAddr string
+	logger   *util.Logger
 }
 
 // NewServiceServer создает новый UDP сервисный сервер.
-func NewServiceServer(addr string, runtime *Runtime) *ServiceServer {
+func NewServiceServer(addr string, runtime *Runtime, l *util.Logger) *ServiceServer {
 	return &ServiceServer{
 		runtime:  runtime,
 		sockAddr: addr,
+		logger:   l.WithName("service_server"),
 	}
 }
 
 // Run запускает сервисный сервер и ожидает завершения.
 func (s *ServiceServer) Run(ctx context.Context) error {
+	defer s.logger.Info("service server stopped")
+
 	var err error
 	if err := os.RemoveAll(s.sockAddr); err != nil {
 		return fmt.Errorf("can not remove previous socket: %w", err)
@@ -71,6 +75,7 @@ func (s *ServiceServer) Run(ctx context.Context) error {
 
 	conns := make(chan net.Conn)
 	go s.acceptConnections(conns)
+	s.logger.Infof("waiting service connection on %s", s.sockAddr)
 
 	wg, _ := errgroup.WithContext(ctx)
 	wg.Go(func() error {
@@ -83,6 +88,7 @@ func (s *ServiceServer) Run(ctx context.Context) error {
 			case <-ctx.Done():
 				return nil
 			case serviceErr := <-errs:
+				clientAddr := conn.RemoteAddr()
 				if conn != nil {
 					conn.Close()
 					conn = nil
@@ -90,9 +96,9 @@ func (s *ServiceServer) Run(ctx context.Context) error {
 				// управляющий сервер прервал соединение, мы от этого не падаем,
 				// так как на runtime это никак не отражается, он не зависим и
 				// работает пока machine_node не подаст команду на завершение.
-				// А machine_node может сделать это через новое соединение
+				// А machine_node может сделать это через новое соединение.
 				if serviceErr == nil || serviceErr == io.EOF {
-					logs.Logger.Warn("service connection closed by client")
+					s.logger.Warnf("service connection closed by client %s", clientAddr)
 					continue
 				}
 				return serviceErr
@@ -100,7 +106,7 @@ func (s *ServiceServer) Run(ctx context.Context) error {
 				if newConn == nil && !ok {
 					return nil
 				}
-				logs.Logger.Info("new service connection received")
+				s.logger.Infof("new service connection received %s", newConn.RemoteAddr())
 				// Если до этого была горутина обработчик, то отключаем её
 				// ошибки в данном случае не важны, так как этот коннект уже не будет использоваться
 				// и отвечать некому.
@@ -108,7 +114,7 @@ func (s *ServiceServer) Run(ctx context.Context) error {
 					conn.Close()
 					<-errs
 
-					logs.Logger.Info("previous connection closed")
+					s.logger.Info("previous connection closed for %s", newConn.RemoteAddr())
 				}
 
 				conn = newConn
@@ -117,8 +123,7 @@ func (s *ServiceServer) Run(ctx context.Context) error {
 		}
 	})
 
-	logs.Logger.Info("service server started")
-	defer logs.Logger.Info("service server stopped")
+	s.logger.Info("service server started")
 	return wg.Wait()
 }
 
@@ -144,13 +149,13 @@ func (s *ServiceServer) handleService(conn net.Conn, errs chan error) {
 		var err error
 		switch command {
 		case PingCommand:
-			logs.Logger.Info("got ping command")
+			s.logger.Debug("got ping command")
 			err = s.ping(conn)
 		case ChangeOutCommand:
-			logs.Logger.Info("got change out command")
+			s.logger.Info("got change out command")
 			err = s.changeOut(conn)
 		default:
-			logs.Logger.Warn("got unknown command")
+			s.logger.Warn("got unknown command")
 			err = s.unknown(conn)
 		}
 		if err != nil {
@@ -164,7 +169,7 @@ func (s *ServiceServer) ping(conn net.Conn) error {
 	if s.runtime.IsRunning() {
 		oldestOutput, err := s.runtime.GetOldestOutput()
 		if err != nil {
-			logs.Logger.Errorf("service: can not get oldest output: %s", err)
+			s.logger.Errorf("service: can not get oldest output: %s", err)
 			return binary.Write(conn, binary.BigEndian, FailResponse)
 		}
 
@@ -190,7 +195,7 @@ func (s *ServiceServer) changeOut(conn net.Conn) error {
 	oldAddr := buildAddress(req.OldIP, req.OldPort)
 	newAddr := buildAddress(req.NewIP, req.NewPort)
 	if err := s.runtime.ChangeOut(oldAddr, newAddr); err != nil {
-		logs.Logger.Errorf("can not change out: %s", err)
+		s.logger.Errorf("can not change out: %s", err)
 		return binary.Write(conn, binary.BigEndian, FailResponse)
 	}
 

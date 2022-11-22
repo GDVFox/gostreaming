@@ -51,13 +51,11 @@ func newMachineWatcher(l *util.Logger, cfg *MachineWatcherConfig) (*MachineWatch
 	return &MachineWatcher{
 		machines: machines,
 		cfg:      cfg,
-		logger:   l,
+		logger:   l.WithName("machine_watcher"),
 	}, nil
 }
 
 func (w *MachineWatcher) sendRunAction(ctx context.Context, schemeName string, node *planner.NodePlan) error {
-	w.logger.Debugf("machine_watcher: starting action %s from plan %s on %s:%d", node.Action, schemeName, node.Host, node.Port)
-
 	machine, ok := w.machines[node.Host]
 	if !ok {
 		return ErrNoHost
@@ -66,8 +64,6 @@ func (w *MachineWatcher) sendRunAction(ctx context.Context, schemeName string, n
 }
 
 func (w *MachineWatcher) sendStopAction(ctx context.Context, schemeName string, node *planner.NodePlan) error {
-	w.logger.Debugf("machine_watcher: stopping action %s from plan %s on %s:%d", node.Action, schemeName, node.Host, node.Port)
-
 	machine, ok := w.machines[node.Host]
 	if !ok {
 		return ErrNoHost
@@ -86,7 +82,7 @@ func (w *MachineWatcher) sendChangeOut(ctx context.Context, schemeName, oldOut, 
 }
 
 func (w *MachineWatcher) pingMachines() map[string]*message.RuntimeTelemetry {
-	w.logger.Debugf("machine_watcher: started ping machines")
+	w.logger.Debug("started ping machines")
 
 	runtimes := make(map[string]*message.RuntimeTelemetry)
 	for machineHost, machine := range w.machines {
@@ -102,7 +98,7 @@ func (w *MachineWatcher) pingMachines() map[string]*message.RuntimeTelemetry {
 		}
 	}
 
-	w.logger.Debugf("machine_watcher: ping machines done")
+	w.logger.Debug("ping machines done")
 	return runtimes
 }
 

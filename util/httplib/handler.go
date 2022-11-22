@@ -31,7 +31,7 @@ func CreateHandler(h Handler, l *util.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token := uuid.New()
 		logger := &util.Logger{SugaredLogger: l.With(zap.String("request_id", token.String()))}
-		logger.Infof("got request %s, %s", r.Method, r.URL)
+		logger.Debugf("got request %s, %s", r.Method, r.URL)
 
 		ctx := context.WithValue(r.Context(), RequestLogger, logger)
 		reply, err := h(r.WithContext(ctx))
@@ -44,7 +44,7 @@ func CreateHandler(h Handler, l *util.Logger) http.HandlerFunc {
 		if err := reply.WriteTo(w); err != nil {
 			logger.Errorf("resp body write error: %v", err)
 		}
-		logger.Infof("request done with code: %d %s", reply.StatusCode, http.StatusText(reply.StatusCode))
+		logger.Debugf("request done with code: %d %s", reply.StatusCode, http.StatusText(reply.StatusCode))
 	}
 }
 
@@ -54,7 +54,7 @@ func CreateWSHandler(h WSHandler, l *util.Logger) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token := uuid.New()
 		logger := &util.Logger{SugaredLogger: l.With(zap.String("request_id", token.String()))}
-		logger.Infof("got request %s, %s", r.Method, r.URL)
+		logger.Debugf("got request %s, %s", r.Method, r.URL)
 
 		ctx := context.WithValue(r.Context(), RequestLogger, logger)
 
@@ -63,6 +63,6 @@ func CreateWSHandler(h WSHandler, l *util.Logger) http.HandlerFunc {
 			return
 		}
 
-		logger.Infof("open ws request done")
+		logger.Debugf("open ws request done")
 	}
 }

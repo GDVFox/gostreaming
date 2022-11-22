@@ -9,6 +9,7 @@ import (
 
 	"github.com/GDVFox/ctxio"
 	"github.com/GDVFox/gostreaming/runtime/external"
+	"github.com/GDVFox/gostreaming/util"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -39,23 +40,26 @@ type DownstreamForwarder struct {
 	name            string
 	addr            string
 	tcpConfig       *external.TCPConnectionConfig
+	logger          *util.Logger
 }
 
 // NewDownstreamForwarder создает новый объект DownstreamForwarder.
-func NewDownstreamForwarder(downstreamIndex uint16, name string, addr string, iter *LogBufferIterator, cfg *DownstreamForwarderConfig) *DownstreamForwarder {
+func NewDownstreamForwarder(downstreamIndex uint16, name string, addr string, iter *LogBufferIterator, cfg *DownstreamForwarderConfig, l *util.Logger) *DownstreamForwarder {
 	return &DownstreamForwarder{
 		downstreamIndex: downstreamIndex,
 		name:            name,
 		addr:            addr,
 		tcpConfig:       cfg.TCPConfig,
 
-		iter: iter,
-		acks: make(chan *downstreamAck),
+		iter:   iter,
+		acks:   make(chan *downstreamAck),
+		logger: l.WithName("downstream_forwarder " + addr),
 	}
 }
 
 // Run запускает клиент действия и блокируется до окончания работы.
 func (f *DownstreamForwarder) Run(ctx context.Context) error {
+	defer f.logger.Info("downstream forwarder stopped")
 	defer close(f.acks)
 
 	conn, err := net.DialTimeout("tcp", f.addr, f.tcpConfig.DialTimeout)
@@ -102,6 +106,8 @@ func (f *DownstreamForwarder) sayHello(ctx context.Context, tcpConn *external.TC
 }
 
 func (f *DownstreamForwarder) receivingLoop(ctx context.Context, conn *external.TCPConnection) error {
+	defer f.logger.Info("receiving loop done")
+
 	connReader := ctxio.NewContextReader(ctx, conn)
 	defer connReader.Close()
 
@@ -120,6 +126,8 @@ func (f *DownstreamForwarder) receivingLoop(ctx context.Context, conn *external.
 }
 
 func (f *DownstreamForwarder) transmitingLoop(ctx context.Context, conn *external.TCPConnection) error {
+	defer f.logger.Info("transmiting loop done")
+
 	connWriter := ctxio.NewContextWriter(ctx, conn)
 	defer connWriter.Close()
 

@@ -23,3 +23,4 @@ action-start-retry:
 
 runtime-path: /gostreaming/bin/runtime
 runtime-logs-dir: /var/log/runtime
+runtime-logs-level: info

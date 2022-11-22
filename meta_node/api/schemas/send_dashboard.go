@@ -76,7 +76,7 @@ func SendDashboard(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	go runGraphLoop(conn, schemeName, sendPeriod, logger)
+	go runGraphLoop(conn, schemeName, sendPeriod, logger.WithName("graph loop"))
 	return nil
 }
 
@@ -91,22 +91,22 @@ func runGraphLoop(conn *websocket.Conn, schemeName string, sendPeriod time.Durat
 
 		telemetry, err := watcher.Watcher.GetPlanTelemetry(schemeName)
 		if err != nil {
-			l.Warnf("graph_loop: can not get telemetry for %s: %s", schemeName, err)
+			l.Warnf("can not get telemetry for %s: %s", schemeName, err)
 
 			jsonErr := newSocketMessage(common.BadSchemeErrorCode, err.Error())
 			if err := conn.WriteMessage(websocket.TextMessage, jsonErr); err != nil {
-				l.Warnf("graph_loop: can not send error message for %s: %s", schemeName, err)
+				l.Warnf("can not send error message for %s: %s", schemeName, err)
 			}
 			return
 		}
 
 		graphImg, err := buildGraph(telemetry.Nodes)
 		if err != nil {
-			l.Warnf("graph_loop: can not generate graph image for %s: %s", schemeName, err)
+			l.Warnf("can not generate graph image for %s: %s", schemeName, err)
 
 			jsonErr := newSocketMessage(common.RenderGraphErrorCode, err.Error())
 			if err := conn.WriteMessage(websocket.TextMessage, jsonErr); err != nil {
-				l.Warnf("graph_loop: can not send error message for %s: %s", schemeName, err)
+				l.Warnf("can not send error message for %s: %s", schemeName, err)
 			}
 			return
 		}
@@ -115,7 +115,7 @@ func runGraphLoop(conn *websocket.Conn, schemeName string, sendPeriod time.Durat
 		conn.SetWriteDeadline(time.Now().Add(writeWait))
 		jsonMsg := newSocketMessage("image", graphImgEncoded)
 		if err := conn.WriteMessage(websocket.TextMessage, jsonMsg); err != nil {
-			l.Warnf("graph_loop: can not write image for %s: %s", schemeName, err)
+			l.Warnf("can not write image for %s: %s", schemeName, err)
 			return
 		}
 	}

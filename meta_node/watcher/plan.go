@@ -72,7 +72,7 @@ func NewPlan(plan *planner.Plan, w *MachineWatcher, l *util.Logger, cfg *PlanCon
 			planNames:       planNames,
 			planAddrIndexes: planAddrIndexes,
 		},
-		logger: l,
+		logger: l.WithName("plan " + plan.Name),
 		cfg:    cfg,
 	}
 }
@@ -82,23 +82,47 @@ func (p *Plan) StartNodes(ctx context.Context) error {
 	p.planNodesMutex.RLock()
 	defer p.planNodesMutex.RUnlock()
 
-	for _, node := range p.plan.nodes {
+	var (
+		startErr    error
+		startErrPos int
+	)
+	for i, node := range p.plan.nodes {
 		if err := p.machineWatcher.sendRunAction(ctx, p.planName, node); err != nil {
 			if errors.Cause(err) == ErrNoAction {
-				return errors.Wrapf(err, "scheme contains unknown action: %s", node.Action)
+				err = errors.Wrapf(err, "scheme contains unknown action: %s", node.Action)
 			} else if errors.Cause(err) == ErrNoHost {
-				return errors.Wrapf(ErrNoHost, "scheme contains unknown host: %s", node.Host)
+				err = errors.Wrapf(ErrNoHost, "scheme contains unknown host: %s", node.Host)
 			}
-			return err
+
+			startErrPos = i
+			startErr = err
+			break
 		}
 	}
-	p.logger.Debugf("plan %s: nodes started", p.planName)
 
-	return nil
+	// Если все ок, то выходим
+	if startErr == nil {
+		p.logger.Info("nodes started")
+		return nil
+	}
+
+	// останавливаем то, что успели включить
+	for i := startErrPos; i >= 0; i-- {
+		node := p.plan.nodes[i]
+		if err := p.machineWatcher.sendStopAction(ctx, p.planName, node); err != nil {
+			p.logger.Errorf("rollback stop error, skipping %s: %s", node.Name, err)
+			continue
+		}
+	}
+	p.logger.Errorf("start failed, rollback done: %s", startErr)
+	return startErr
 }
 
 // RunProtection запускает проверку работоспобности.
 func (p *Plan) RunProtection(ctx context.Context) error {
+	defer p.logger.Infof("protection stopped")
+	p.logger.Infof("protection started")
+
 	ticker := time.NewTicker(time.Duration(p.cfg.PingFrequency))
 
 ProctionLoop:
@@ -155,7 +179,8 @@ func (p *Plan) protectPlan(ctx context.Context) {
 	p.planNodesMutex.Lock()
 	defer p.planNodesMutex.Unlock()
 
-	p.logger.Debugf("plan %s: plan check started", p.planName)
+	p.logger.Debug("check started")
+	defer p.logger.Debug("check done")
 
 	telemetry := p.machineWatcher.pingMachines()
 	for i, node := range p.plan.nodes {
@@ -163,22 +188,19 @@ func (p *Plan) protectPlan(ctx context.Context) {
 		if _, isRunning := telemetry[runtimeName]; isRunning {
 			continue
 		}
-
-		p.logger.Warnf("plan %s: action %s not found, starting fix", p.planName, node.Name)
+		p.logger.Warnf("node '%s' not working, starting fix", node.Name)
 
 		// Пытаемся поднять потерянные действия, пока не получится.
 		retryConfig := &util.RetryConfig{Count: 0, Delay: p.cfg.RetryDelay}
 		util.Retry(ctx, retryConfig, func() error {
 			if err := p.fixAction(ctx, i, telemetry); err != nil {
-				p.logger.Errorf("plan %s: can not fix action %s: %s", p.planName, node.Name, err)
+				p.logger.Errorf("can not fix node '%s': %s", node.Name, err)
 				return err
 			}
 			return nil
 		})
 
 	}
-
-	p.logger.Debugf("plan %s: plan check done", p.planName)
 }
 
 // fixAction не tread-safe для planNode, должен запускаться под мьютексом
@@ -196,6 +218,7 @@ func (p *Plan) fixAction(ctx context.Context, actionIndex int, telemetry map[str
 	if err := p.machineWatcher.sendRunAction(ctx, p.planName, planNode); err != nil {
 		return fmt.Errorf("plan %s: can not send run action %s: %w", p.planName, planNode.Action, err)
 	}
+	p.logger.Infof("node '%s' started with new address %s", planNode.Name, newNodeAddr)
 
 	for _, in := range planNode.In {
 		inParts := strings.Split(in, "_")
@@ -208,10 +231,10 @@ func (p *Plan) fixAction(ctx context.Context, actionIndex int, telemetry map[str
 		// т.к. node не запущена, достаточно сменить выход в памяти.
 		inRuntimeName := buildRuntimeName(p.planName, inNode.Name)
 		if _, isInRunning := telemetry[inRuntimeName]; !isInRunning {
-			p.logger.Debugf("plan %s: in node %s disabled, changing in-memory %s -> %s", p.planName, inNode.Name, oldNodeAddr, newNodeAddr)
-
 			oldAddrIndex := util.FindStringIndex(inNode.Out, oldNodeAddr)
 			inNode.Out[oldAddrIndex] = newNodeAddr
+
+			p.logger.Infof("node '%s' disabled, changed out in-memory %s->%s", inNode.Name, oldNodeAddr, newNodeAddr)
 			continue
 		}
 
@@ -220,7 +243,7 @@ func (p *Plan) fixAction(ctx context.Context, actionIndex int, telemetry map[str
 		retryConfig := &util.RetryConfig{Count: 0, Delay: p.cfg.RetryDelay}
 		util.Retry(ctx, retryConfig, func() error {
 			if err := p.machineWatcher.sendChangeOut(ctx, p.planName, oldNodeAddr, newNodeAddr, inNode); err != nil {
-				p.logger.Errorf("plan %s: can not change out in action %s: %s", p.planName, inNode.Action, err)
+				p.logger.Errorf("can not change out in action '%s': %s", inNode.Action, err)
 				return err
 			}
 			return nil
@@ -228,17 +251,23 @@ func (p *Plan) fixAction(ctx context.Context, actionIndex int, telemetry map[str
 
 		oldAddrIndex := util.FindStringIndex(inNode.Out, oldNodeAddr)
 		inNode.Out[oldAddrIndex] = newNodeAddr
+
+		p.logger.Infof("node '%s' changed out %s->%s", inNode.Name, oldNodeAddr, newNodeAddr)
 	}
 
 	p.plan.planNames[planNode.Name] = planNode
 	p.plan.nodes[actionIndex] = planNode
 	p.plan.planAddrIndexes[actionIndex] = newAddrIndex
+
+	p.logger.Infof("node '%s' fixed", planNode.Name)
 	return nil
 }
 
 func (p *Plan) stopNodes(ctx context.Context) error {
 	p.planNodesMutex.RLock()
 	defer p.planNodesMutex.RUnlock()
+
+	p.logger.Info("stopping nodes")
 
 	// останавливаем в обратном порядке.
 	for i := len(p.plan.nodes) - 1; i >= 0; i-- {
@@ -253,6 +282,6 @@ func (p *Plan) stopNodes(ctx context.Context) error {
 		}
 	}
 
-	p.logger.Debugf("plan %s: nodes stopped", p.planName)
+	p.logger.Info("nodes stopped")
 	return nil
 }
