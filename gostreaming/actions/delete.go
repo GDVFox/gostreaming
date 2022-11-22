@@ -3,7 +3,7 @@ package actions
 import (
 	"errors"
 
-	"github.com/GDVFox/gostreaming/client/metaclient"
+	"github.com/GDVFox/gostreaming/gostreaming/metaclient"
 	"github.com/pterm/pterm"
 	flag "github.com/spf13/pflag"
 )

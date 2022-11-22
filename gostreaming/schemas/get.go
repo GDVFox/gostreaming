@@ -9,7 +9,7 @@ import (
 	flag "github.com/spf13/pflag"
 	"gopkg.in/yaml.v3"
 
-	"github.com/GDVFox/gostreaming/client/metaclient"
+	"github.com/GDVFox/gostreaming/gostreaming/metaclient"
 	"github.com/pterm/pterm"
 )
 

@@ -8,7 +8,7 @@ import (
 	"path"
 	"path/filepath"
 
-	"github.com/GDVFox/gostreaming/client/metaclient"
+	"github.com/GDVFox/gostreaming/gostreaming/metaclient"
 	"github.com/GDVFox/gostreaming/meta_node/planner"
 	"github.com/pterm/pterm"
 	flag "github.com/spf13/pflag"

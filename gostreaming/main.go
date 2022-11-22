@@ -3,11 +3,11 @@ package main
 import (
 	"os"
 
-	"github.com/GDVFox/gostreaming/client/about"
-	"github.com/GDVFox/gostreaming/client/actions"
-	"github.com/GDVFox/gostreaming/client/help"
-	"github.com/GDVFox/gostreaming/client/metaclient"
-	"github.com/GDVFox/gostreaming/client/schemas"
+	"github.com/GDVFox/gostreaming/gostreaming/about"
+	"github.com/GDVFox/gostreaming/gostreaming/actions"
+	"github.com/GDVFox/gostreaming/gostreaming/help"
+	"github.com/GDVFox/gostreaming/gostreaming/metaclient"
+	"github.com/GDVFox/gostreaming/gostreaming/schemas"
 	"github.com/pterm/pterm"
 )
 
