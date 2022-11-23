@@ -40,9 +40,8 @@ type workingDownstream struct {
 
 // DefaultForwarderConfig набор параметров для DefaultForwarder.
 type DefaultForwarderConfig struct {
-	ACKPeriod        time.Duration
-	ForwardLogDir    string
-	DownstreamConfig *DownstreamForwarderConfig
+	ACKPeriod     time.Duration
+	ForwardLogDir string
 }
 
 // DefaultForwarder предает сообщения дальше по потоку,
@@ -74,13 +73,12 @@ type DefaultForwarder struct {
 	upstreamAcks chan UpstreamAck
 	ackTicker    *time.Ticker
 
-	downstreamConfig *DownstreamForwarderConfig
-	logger           *util.Logger
+	logger *util.Logger
 }
 
 // NewDefaultForwarder создает новый объект DefaultForwarder.
 func NewDefaultForwarder(name string, outs []string, cfg *DefaultForwarderConfig, l *util.Logger) (*DefaultForwarder, error) {
-	forwardLog, err := NewForwardLog(cfg.ForwardLogDir + util.RandString(16))
+	forwardLog, err := NewForwardLog(cfg.ForwardLogDir)
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +98,6 @@ func NewDefaultForwarder(name string, outs []string, cfg *DefaultForwarderConfig
 		downstreamsIndexes: downstreamsIndexes,
 		upstreamAcks:       make(chan UpstreamAck),
 		ackTicker:          time.NewTicker(cfg.ACKPeriod),
-		downstreamConfig:   cfg.DownstreamConfig,
 		logger:             l.WithName("default_forwarder"),
 	}, nil
 }
@@ -179,7 +176,7 @@ func (f *DefaultForwarder) runDownstream(ctx context.Context, downstreamIndex ui
 	}
 
 	wd := &workingDownstream{
-		downstream:     NewDownstreamForwarder(downstreamIndex, f.name, addr, f.forwardLog.NewIterator(), f.downstreamConfig, f.logger),
+		downstream:     NewDownstreamForwarder(downstreamIndex, f.name, addr, f.forwardLog.NewIterator(), f.logger),
 		stopDownstream: downstreamStop,
 		done:           make(chan struct{}),
 	}
@@ -215,21 +212,20 @@ func (f *DefaultForwarder) Forward(inputID uint16, inputMsgID uint32, data []byt
 	// Всегда увеличиваем счетчик, пропуски в случае ошибок не должны ни на что влиять
 	defer func() { f.messageIndex++ }()
 
-	if err := f.updateInputMax(inputID, inputMsgID); err != nil {
-		return fmt.Errorf("can not update max: %w", err)
-	}
-
 	// Если далее по схеме передавать сообщение некому,
 	// то и от логирования в буфер нет смысла.
 	// Кроме того по протоколу не передаются далее и пустые сообщения,
 	// они лишь служат маркером для перадачи подтверждений выше по потоку.
-	if len(f.downstreamsIndexes) == 0 || len(data) == 0 {
-		return nil
+	if len(f.downstreamsIndexes) != 0 && len(data) != 0 {
+		if err := f.forwardLog.Write(inputID, inputMsgID, f.messageIndex, data); err != nil {
+			return fmt.Errorf("can not write forward log: %w", err)
+		}
 	}
 
-	if err := f.forwardLog.Write(inputID, inputMsgID, f.messageIndex, data); err != nil {
-		return fmt.Errorf("can not write forward log: %w", err)
+	if err := f.updateInputMax(inputID, inputMsgID); err != nil {
+		return fmt.Errorf("can not update max: %w", err)
 	}
+
 	f.logger.Debugf("forward message %d (len %d) done", f.messageIndex, len(data))
 	return nil
 }
@@ -331,7 +327,7 @@ func (f *DefaultForwarder) trimForwardLog() (UpstreamAck, uint32, error) {
 	wasMin := false
 	minAck := uint32(0)
 	for _, ack := range f.downstreamsAcks {
-		if !wasMin || minAck < ack {
+		if !wasMin || minAck > ack {
 			wasMin = true
 			minAck = ack
 		}

@@ -40,7 +40,7 @@ type planDescription struct {
 // PlanConfig набор настроек плана
 type PlanConfig struct {
 	PingFrequency util.Duration
-	RetryDelay    util.Duration
+	Retry         *util.RetryConfig
 }
 
 // Plan отслеживает состояние машин в плане.
@@ -191,7 +191,7 @@ func (p *Plan) protectPlan(ctx context.Context) {
 		p.logger.Warnf("node '%s' not working, starting fix", node.Name)
 
 		// Пытаемся поднять потерянные действия, пока не получится.
-		retryConfig := &util.RetryConfig{Count: 0, Delay: p.cfg.RetryDelay}
+		retryConfig := &util.RetryConfig{Count: 0, Delay: p.cfg.Retry.Delay}
 		util.Retry(ctx, retryConfig, func() error {
 			if err := p.fixAction(ctx, i, telemetry); err != nil {
 				p.logger.Errorf("can not fix node '%s': %s", node.Name, err)
@@ -238,16 +238,21 @@ func (p *Plan) fixAction(ctx context.Context, actionIndex int, telemetry map[str
 			continue
 		}
 
-		// Пытаемся обновить выходы в вечном retry, так как транзакций нет,
-		// а частичный запуск мы не хотим.
-		retryConfig := &util.RetryConfig{Count: 0, Delay: p.cfg.RetryDelay}
-		util.Retry(ctx, retryConfig, func() error {
-			if err := p.machineWatcher.sendChangeOut(ctx, p.planName, oldNodeAddr, newNodeAddr, inNode); err != nil {
-				p.logger.Errorf("can not change out in action '%s': %s", inNode.Action, err)
-				return err
-			}
-			return nil
+		// Если изменить out у вышестоящей ноды не получается,
+		// то считаем, что она не работает и пытаемся отключить.
+		// Удаляем её из активных, чтобы также начать восстанавливать.
+		err := util.Retry(ctx, p.cfg.Retry, func() error {
+			return p.machineWatcher.sendChangeOut(ctx, p.planName, oldNodeAddr, newNodeAddr, inNode)
 		})
+		if err != nil {
+			p.logger.Errorf("can not change out in action '%s': %s", inNode.Action, err)
+			p.logger.Infof("found node '%s' disabled during fix, sending stop action", inNode.Action, err)
+			if err := p.machineWatcher.sendStopAction(ctx, p.planName, inNode); err != nil {
+				p.logger.Errorf("can not send stop action '%s': %s, skipping", inNode.Action, err)
+			}
+
+			delete(telemetry, inRuntimeName)
+		}
 
 		oldAddrIndex := util.FindStringIndex(inNode.Out, oldNodeAddr)
 		inNode.Out[oldAddrIndex] = newNodeAddr

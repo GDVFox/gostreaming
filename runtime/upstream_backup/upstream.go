@@ -7,8 +7,8 @@ import (
 	"fmt"
 
 	"github.com/GDVFox/ctxio"
-	"github.com/GDVFox/gostreaming/runtime/external"
 	"github.com/GDVFox/gostreaming/util"
+	"github.com/GDVFox/gostreaming/util/connutil"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -30,18 +30,12 @@ var DummyUpstreamMessage = &UpstreamMessage{
 	dataMessage: &dataMessage{},
 }
 
-// UpstreamReceiverConfig набор настроек для UpstreamReceiver.
-type UpstreamReceiverConfig struct {
-	AckBufferSize int
-	TCPConfig     *external.TCPConnectionConfig
-}
-
 // UpstreamReceiver структура, для получения сообщений от узлов выше по потоку.
 type UpstreamReceiver struct {
 	upstreamIndex uint16
 	name          string
 
-	conn       *external.TCPConnection
+	conn       *connutil.Connection
 	connWriter *ctxio.ContextWriter
 
 	output chan *UpstreamMessage
@@ -49,7 +43,7 @@ type UpstreamReceiver struct {
 }
 
 // NewUpstreamReceiver создает новый UpstreamReceiver.
-func NewUpstreamReceiver(upstreamIndex uint16, name string, tcpConn *external.TCPConnection, cfg *UpstreamReceiverConfig, l *util.Logger) *UpstreamReceiver {
+func NewUpstreamReceiver(upstreamIndex uint16, name string, tcpConn *connutil.Connection, l *util.Logger) *UpstreamReceiver {
 	return &UpstreamReceiver{
 		upstreamIndex: upstreamIndex,
 		name:          name,

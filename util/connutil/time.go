@@ -1,4 +1,4 @@
-package external
+package connutil
 
 import (
 	"sync/atomic"

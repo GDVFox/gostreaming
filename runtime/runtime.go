@@ -3,8 +3,10 @@ package main
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"os/exec"
 	"sync/atomic"
@@ -108,12 +110,11 @@ func (r *Runtime) Run(ctx context.Context) error {
 		defer runtimeCancel()
 		return r.receiver.Run(runCtx)
 	})
-	if err := wg.Wait(); err != nil {
+	if err := wg.Wait(); err != nil && !errors.Is(err, net.ErrClosed) && !errors.Is(err, io.EOF) {
 		return fmt.Errorf("action io got error: %w", err)
 	}
 
-	r.logger.Debug("io done, waitring command end")
-	// Если input/output завершился, то ждем окончания работы действия.
+	r.logger.Info("io done, waitring command end")
 	if err := runActionCommand.Wait(); err != nil {
 		exitErr, ok := err.(*exec.ExitError)
 		if !ok {

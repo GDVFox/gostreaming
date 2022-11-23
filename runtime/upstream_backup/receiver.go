@@ -8,8 +8,8 @@ import (
 	"sync"
 
 	"github.com/GDVFox/ctxio"
-	"github.com/GDVFox/gostreaming/runtime/external"
 	"github.com/GDVFox/gostreaming/util"
+	"github.com/GDVFox/gostreaming/util/connutil"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -21,11 +21,6 @@ var (
 type workingUpstream struct {
 	upstream     *UpstreamReceiver
 	stopUpstream context.CancelFunc
-}
-
-// DefaultReceiverConfig набор параметров для DefaultReceiver.
-type DefaultReceiverConfig struct {
-	UpstreamConfig *UpstreamReceiverConfig
 }
 
 // DefaultReceiver получает сообщения от вышестоящих узлов.
@@ -41,13 +36,12 @@ type DefaultReceiver struct {
 	upstreamInWorkIndexes map[uint16]string
 
 	upstreamNames map[string]struct{}
-	upsteamConfig *UpstreamReceiverConfig
 
 	logger *util.Logger
 }
 
 // NewDefaultReceiver возвращает новый объект DefaultReceiver.
-func NewDefaultReceiver(addr string, inNames []string, cfg *DefaultReceiverConfig, l *util.Logger) *DefaultReceiver {
+func NewDefaultReceiver(addr string, inNames []string, l *util.Logger) *DefaultReceiver {
 	upstreamNames := make(map[string]struct{})
 	for _, in := range inNames {
 		upstreamNames[in] = struct{}{}
@@ -61,7 +55,6 @@ func NewDefaultReceiver(addr string, inNames []string, cfg *DefaultReceiverConfi
 		upstreamNames:         upstreamNames,
 		upstreamInWork:        make(map[string]*workingUpstream),
 		upstreamInWorkIndexes: make(map[uint16]string),
-		upsteamConfig:         cfg.UpstreamConfig,
 		logger:                l.WithName("default_receiver"),
 	}
 }
@@ -108,7 +101,7 @@ func (r *DefaultReceiver) Run(ctx context.Context) error {
 			receiverWG.Add(1)
 			go func() {
 				defer receiverWG.Done()
-				r.runUpstream(receiveCtx, newUpstreamIndex, external.NewTCPConnection(conn, r.upsteamConfig.TCPConfig))
+				r.runUpstream(receiveCtx, newUpstreamIndex, connutil.NewDefaultConnection(conn))
 			}()
 		}
 	})
@@ -131,7 +124,7 @@ func (r *DefaultReceiver) Run(ctx context.Context) error {
 	return wg.Wait()
 }
 
-func (r *DefaultReceiver) runUpstream(ctx context.Context, upstreamIndex uint16, tcpConn *external.TCPConnection) {
+func (r *DefaultReceiver) runUpstream(ctx context.Context, upstreamIndex uint16, tcpConn *connutil.Connection) {
 	defer tcpConn.Close()
 
 	upstreamCtx, upstreamStop := context.WithCancel(ctx)
@@ -155,7 +148,7 @@ func (r *DefaultReceiver) runUpstream(ctx context.Context, upstreamIndex uint16,
 		r.logger.Debugf("send stop signal to previous upstream %s", upstreamName)
 	}
 
-	upstream := NewUpstreamReceiver(upstreamIndex, upstreamName, tcpConn, r.upsteamConfig, r.logger)
+	upstream := NewUpstreamReceiver(upstreamIndex, upstreamName, tcpConn, r.logger)
 	r.upstreamInWork[upstreamName] = &workingUpstream{
 		upstream:     upstream,
 		stopUpstream: upstreamStop,
@@ -189,7 +182,7 @@ func (r *DefaultReceiver) runUpstream(ctx context.Context, upstreamIndex uint16,
 	wg.Wait()
 }
 
-func (r *DefaultReceiver) listenHello(ctx context.Context, tcpConn *external.TCPConnection) (string, error) {
+func (r *DefaultReceiver) listenHello(ctx context.Context, tcpConn *connutil.Connection) (string, error) {
 	connReader := ctxio.NewContextReader(ctx, tcpConn)
 	defer connReader.Free()
 

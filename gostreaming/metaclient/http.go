@@ -8,7 +8,6 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/url"
-	"time"
 
 	"github.com/GDVFox/gostreaming/meta_node/api/actions"
 	"github.com/GDVFox/gostreaming/meta_node/api/schemas"
@@ -57,7 +56,8 @@ func OpenMetaNodeClient(cfg *MetaNodeClientConfig) {
 // NewMetaNodeClient возвращает новый MetaNodeClient
 func NewMetaNodeClient(cfg *MetaNodeClientConfig) *MetaNodeClient {
 	return &MetaNodeClient{
-		client: &http.Client{Timeout: 1 * time.Minute},
+		// Тут не нужен таймаут, так как в случае его команду можно прервать сигналом.
+		client: &http.Client{},
 		cfg:    cfg,
 	}
 }

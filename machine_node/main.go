@@ -31,8 +31,8 @@ func main() {
 		return
 	}
 
-	if _, err := os.Stat(config.Conf.RuntimeLogsDir); os.IsNotExist(err) {
-		if err := os.Mkdir(config.Conf.RuntimeLogsDir, 0700); err != nil {
+	if _, err := os.Stat(config.Conf.Runtime.LogsDir); os.IsNotExist(err) {
+		if err := os.Mkdir(config.Conf.Runtime.LogsDir, 0700); err != nil {
 			fmt.Printf("can not create logging dir: %v", err)
 			return
 		}

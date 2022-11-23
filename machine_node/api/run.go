@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"time"
 
 	"github.com/GDVFox/gostreaming/machine_node/config"
 	"github.com/GDVFox/gostreaming/machine_node/external"
@@ -36,10 +37,13 @@ func RunAction(r *http.Request) (*httplib.Response, error) {
 		Port:             req.Port,
 		In:               req.In,
 		Out:              req.Out,
-		RuntimePath:      config.Conf.RuntimePath,
-		RuntimeLogsDir:   config.Conf.RuntimeLogsDir,
-		RuntimeLogsLevel: config.Conf.RuntimeLogsLevel,
-		ActionStartRetry: config.Conf.ActionStartRetry,
+		RuntimePath:      config.Conf.Runtime.BinaryPath,
+		RuntimeLogsDir:   config.Conf.Runtime.LogsDir,
+		RuntimeLogsLevel: config.Conf.Runtime.LogsLevel,
+		ActionStartRetry: config.Conf.Runtime.ActionStartRetry,
+		Timeout:          time.Duration(config.Conf.Runtime.Timeout),
+		AckPeriod:        time.Duration(config.Conf.Runtime.AckPeriod),
+		ForwardLogDir:    config.Conf.Runtime.ForwardLogDir,
 		ActionOptions: &watcher.ActionOptions{
 			Args: req.Args,
 			Env:  req.Env,

@@ -2,22 +2,18 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
-	"io"
-	"net"
 	"os"
 	"os/signal"
 	"strconv"
 	"syscall"
-	"time"
+
+	"golang.org/x/sync/errgroup"
 
 	"github.com/GDVFox/gostreaming/runtime/config"
-	"github.com/GDVFox/gostreaming/runtime/external"
 	upstreambackup "github.com/GDVFox/gostreaming/runtime/upstream_backup"
 	"github.com/GDVFox/gostreaming/util"
-	"golang.org/x/sync/errgroup"
 )
 
 func init() {
@@ -31,6 +27,8 @@ func init() {
 	flag.StringVar(&config.Conf.InRaw, "in", "", "Input addresses")
 	flag.StringVar(&config.Conf.OutRaw, "out", "", "Output addresses")
 	flag.StringVar(&config.Conf.ActionOptionsRaw, "action-opt", "", "Action args and env variables in JSON format")
+	flag.StringVar(&config.Conf.ACKPeriodRaw, "ack-period", "5s", "Period for sending ACK in duration format")
+	flag.StringVar(&config.Conf.ForwardLogDir, "buffer-dir", "/tmp/gostreaming-logs", "Directory for buffers")
 }
 
 func main() {
@@ -42,11 +40,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	inConfig := external.NewTCPConnectionConfig()
-	inConfig.NoDelay = false
-
-	outConfig := external.NewTCPConnectionConfig()
-	outConfig.NoDelay = false
+	forwarderConfig := &upstreambackup.DefaultForwarderConfig{
+		ACKPeriod:     config.Conf.ACKPeriod,
+		ForwardLogDir: config.Conf.ForwardLogDir,
+	}
 
 	// всегда чистим файлы в runtime.
 	config.Conf.Logger.TruncateFile = true
@@ -67,22 +64,7 @@ func main() {
 		cancel()
 	}()
 
-	receiverConfig := &upstreambackup.DefaultReceiverConfig{
-		UpstreamConfig: &upstreambackup.UpstreamReceiverConfig{
-			AckBufferSize: 100,
-			TCPConfig:     inConfig,
-		},
-	}
-	receiver := upstreambackup.NewDefaultReceiver(":"+strconv.Itoa(config.Conf.Port), config.Conf.In, receiverConfig, logger)
-
-	forwarderConfig := &upstreambackup.DefaultForwarderConfig{
-		ACKPeriod:     5 * time.Second,
-		ForwardLogDir: "/tmp/gostreaming-logs",
-		DownstreamConfig: &upstreambackup.DownstreamForwarderConfig{
-			MessagesBufferSize: 100,
-			TCPConfig:          outConfig,
-		},
-	}
+	receiver := upstreambackup.NewDefaultReceiver(":"+strconv.Itoa(config.Conf.Port), config.Conf.In, logger)
 	forwarder, err := upstreambackup.NewDefaultForwarder(config.Conf.Name, config.Conf.Out, forwarderConfig, logger)
 	if err != nil {
 		logger.Errorf("can not init forwarder: %v", err)
@@ -96,15 +78,16 @@ func main() {
 
 	wg, runCtx := errgroup.WithContext(ctx)
 	wg.Go(func() error {
-		defer cancel() // завершение runtime должно завершать все.
+		defer cancel()
 		return runtime.Run(runCtx)
 	})
 	wg.Go(func() error {
+		defer cancel()
 		return serviceServer.Run(runCtx)
 	})
 
 	logger.Infof("runtime started for action: %s", config.Conf.ActionPath)
-	if err := wg.Wait(); err != nil && !errors.Is(err, net.ErrClosed) && !errors.Is(err, io.EOF) {
+	if err := wg.Wait(); err != nil {
 		logger.Errorf("action run error: %v", err)
 		fmt.Fprintf(os.Stderr, "action run error: %v\n", err)
 		os.Exit(1)

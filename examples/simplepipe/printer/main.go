@@ -32,9 +32,6 @@ func runReadLoop(dataCh chan uint32) {
 		}
 		num := binary.BigEndian.Uint32(data)
 		dataCh <- num
-		if err := actionlib.AckMessage(); err != nil {
-			actionlib.WriteFatal(err)
-		}
 	}
 }
 
@@ -110,6 +107,10 @@ func (b *broadcaster) transmitLoop(ctx context.Context, dataCh chan uint32) erro
 
 			b.conns = b.conns[:i]
 			b.connsMutex.Unlock()
+
+			if err := actionlib.AckMessage(); err != nil {
+				actionlib.WriteFatal(err)
+			}
 		}
 	}
 }

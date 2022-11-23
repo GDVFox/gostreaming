@@ -17,10 +17,13 @@ watcher:
   pings-to-stop: 3
   ping-freq: 3s
 
-action-start-retry:
-  delay: 1s
-  count: 10
-
-runtime-path: /gostreaming/bin/runtime
-runtime-logs-dir: /var/log/runtime
-runtime-logs-level: info
+runtime:
+  binary-path: /gostreaming/bin/runtime
+  logs-dir: /var/log/runtime
+  logs-level: info
+  timeout: 5s
+  ack-period: 5s
+  forward-log-dir: /tmp/gostreaming-log
+  action-start-retry:
+    delay: 1s
+    count: 10

@@ -12,13 +12,16 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/GDVFox/gostreaming/util"
+	"github.com/GDVFox/gostreaming/util/connutil"
 )
 
 const (
@@ -71,6 +74,10 @@ type RuntimeOptions struct {
 	RuntimeLogsDir   string
 	RuntimeLogsLevel string
 	ActionStartRetry *util.RetryConfig
+
+	Timeout       time.Duration
+	AckPeriod     time.Duration
+	ForwardLogDir string
 }
 
 // Runtime структура, представляющая собой запущенное действие
@@ -88,7 +95,7 @@ type Runtime struct {
 	cmd             *exec.Cmd
 	stderr          io.ReadCloser
 	serviceSockPath string
-	serviceConn     net.Conn
+	serviceConn     *connutil.Connection
 
 	logger *util.Logger
 }
@@ -146,6 +153,8 @@ func (r *Runtime) Start(ctx context.Context) error {
 		"--service-sock="+r.serviceSockPath,
 		"--log-file="+logFileAddr,
 		"--log-level="+r.opt.RuntimeLogsLevel,
+		"--ack-period="+r.opt.AckPeriod.String(),
+		"--buffer-dir="+path.Join(r.opt.ForwardLogDir, r.Name(), util.RandString(16)),
 		"--in="+strings.Join(r.opt.In, ","),
 		"--out="+strings.Join(r.opt.Out, ","),
 		"--action-opt="+string(actionOptions),
@@ -162,6 +171,11 @@ func (r *Runtime) Start(ctx context.Context) error {
 	r.logger.Infof("runtime started with command: %s", r.cmd.String())
 
 	if err := r.connect(ctx); err != nil {
+		r.logger.Errorf("runtime started, but not responsing, stopping runtime: %s", err)
+		if err := r.Stop(); err != nil {
+			return fmt.Errorf("can not stop failed runtime: %w", err)
+		}
+
 		return fmt.Errorf("can not connect to action: %w", err)
 	}
 	r.logger.Info("service connection created")
@@ -189,11 +203,16 @@ func (r *Runtime) createTmpBinary(name string, bin []byte) (string, error) {
 
 func (r *Runtime) connect(ctx context.Context) error {
 	dialErr := util.Retry(ctx, r.opt.ActionStartRetry, func() error {
-		var err error
-		r.serviceConn, err = net.Dial("unix", r.serviceSockPath)
+		connConfig := &connutil.ConnectionConfig{
+			DialTimeout:  r.opt.Timeout,
+			ReadTimeout:  r.opt.Timeout,
+			WriteTimeout: r.opt.Timeout,
+		}
+		conn, err := net.DialTimeout("unix", r.serviceSockPath, connConfig.DialTimeout)
 		if err != nil {
 			return err
 		}
+		r.serviceConn = connutil.NewDefaultConnection(conn)
 
 		if _, err := r.Ping(); err != nil {
 			return err
@@ -320,14 +339,35 @@ func (r *Runtime) Stop() error {
 	}
 	r.logger.Info("SIGTERM sended")
 
+	procErrs := make(chan error, 1)
+	go func() {
+		procErrs <- r.waitProcess()
+	}()
+
+	select {
+	case <-time.After(r.opt.Timeout):
+		r.logger.Warn("wait process timeout sending SIGKILL")
+		if err := r.cmd.Process.Kill(); err != nil {
+			return fmt.Errorf("failed to kill process: %w", err)
+		}
+		if err := <-procErrs; err != nil {
+			return err
+		}
+		return nil
+	case err := <-procErrs:
+		r.logger.Info("successfully stopped process")
+		return err
+	}
+}
+
+func (r *Runtime) waitProcess() error {
 	state, err := r.cmd.Process.Wait()
 	if err != nil {
 		return fmt.Errorf("can not wait and of runtime process: %w", err)
 	}
-	r.logger.Info("Process stopped")
 
-	// успешное завершение процесса
-	if state.Success() {
+	// state.ExitCode() == -1 process killed
+	if state.Success() || state.ExitCode() == -1 {
 		return nil
 	}
 

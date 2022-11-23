@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/GDVFox/gostreaming/util"
 )
@@ -39,9 +40,14 @@ type Config struct {
 	OutRaw           string
 	ActionOptionsRaw string
 
+	ACKPeriodRaw  string
+	ForwardLogDir string
+
 	In            []string
 	Out           []string
 	ActionOptions *ActionOptions
+
+	ACKPeriod time.Duration
 }
 
 // Parse загружает данные конфига.
@@ -56,5 +62,12 @@ func (c *Config) Parse() error {
 	if err := json.Unmarshal([]byte(c.ActionOptionsRaw), c.ActionOptions); err != nil {
 		return fmt.Errorf("can not parse action options: %w", err)
 	}
+
+	dur, err := time.ParseDuration(c.ACKPeriodRaw)
+	if err != nil {
+		return fmt.Errorf("can not parse ack period: %w", err)
+	}
+	c.ACKPeriod = dur
+
 	return nil
 }

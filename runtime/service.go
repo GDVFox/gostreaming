@@ -3,12 +3,15 @@ package main
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"os"
 	"strconv"
+	"sync"
 
+	"github.com/GDVFox/ctxio"
 	"github.com/GDVFox/gostreaming/util"
 	"golang.org/x/sync/errgroup"
 )
@@ -67,128 +70,124 @@ func (s *ServiceServer) Run(ctx context.Context) error {
 		return fmt.Errorf("can not remove previous socket: %w", err)
 	}
 
+	serviceWG := &sync.WaitGroup{}
+	defer serviceWG.Wait()
+
 	s.listener, err = net.Listen("unix", s.sockAddr)
 	if err != nil {
 		return fmt.Errorf("can not listen unix: %w", err)
 	}
-	defer s.listener.Close()
 
-	conns := make(chan net.Conn)
-	go s.acceptConnections(conns)
-	s.logger.Infof("waiting service connection on %s", s.sockAddr)
+	serviceWG.Add(1)
+	go func() {
+		defer serviceWG.Done()
 
-	wg, _ := errgroup.WithContext(ctx)
+		<-ctx.Done()
+		if err := s.listener.Close(); err != nil {
+			s.logger.Errorf("can not close listener: %s", err)
+			return
+		}
+		s.logger.Info("listener closed")
+	}()
+
+	wg, serviceCtx := errgroup.WithContext(ctx)
 	wg.Go(func() error {
-		var (
-			conn net.Conn
-			errs = make(chan error)
-		)
+		var conn net.Conn
 		for {
-			select {
-			case <-ctx.Done():
-				return nil
-			case serviceErr := <-errs:
-				clientAddr := conn.RemoteAddr()
-				if conn != nil {
-					conn.Close()
-					conn = nil
-				}
-				// управляющий сервер прервал соединение, мы от этого не падаем,
-				// так как на runtime это никак не отражается, он не зависим и
-				// работает пока machine_node не подаст команду на завершение.
-				// А machine_node может сделать это через новое соединение.
-				if serviceErr == nil || serviceErr == io.EOF {
-					s.logger.Warnf("service connection closed by client %s", clientAddr)
-					continue
-				}
-				return serviceErr
-			case newConn, ok := <-conns:
-				if newConn == nil && !ok {
-					return nil
-				}
-				s.logger.Infof("new service connection received %s", newConn.RemoteAddr())
-				// Если до этого была горутина обработчик, то отключаем её
-				// ошибки в данном случае не важны, так как этот коннект уже не будет использоваться
-				// и отвечать некому.
-				if conn != nil {
-					conn.Close()
-					<-errs
-
-					s.logger.Info("previous connection closed for %s", newConn.RemoteAddr())
-				}
-
-				conn = newConn
-				go s.handleService(conn, errs)
+			newConn, err := s.listener.Accept()
+			if err != nil {
+				return fmt.Errorf("can not accept at %s: %w", s.listener.Addr(), err)
 			}
+			s.logger.Infof("new service connection received %s", newConn.RemoteAddr())
+
+			if conn != nil {
+				conn.Close()
+				conn = nil
+
+				s.logger.Info("previous connection closed for %s", conn.RemoteAddr())
+			}
+			conn = newConn
+
+			serviceWG.Add(1)
+			go func() {
+				defer serviceWG.Done()
+				s.handleService(serviceCtx, conn)
+			}()
 		}
 	})
 
 	s.logger.Info("service server started")
-	return wg.Wait()
-}
-
-func (s *ServiceServer) acceptConnections(conns chan<- net.Conn) error {
-	defer close(conns)
-	for {
-		conn, err := s.listener.Accept()
-		if err != nil {
-			return fmt.Errorf("can not accept at %s: %w", s.listener.Addr(), err)
-		}
-		conns <- conn
+	if err := wg.Wait(); err != nil && !errors.Is(err, net.ErrClosed) && !errors.Is(err, io.EOF) {
+		return fmt.Errorf("service server got error: %w", err)
 	}
+	return nil
 }
 
-func (s *ServiceServer) handleService(conn net.Conn, errs chan error) {
+func (s *ServiceServer) handleService(ctx context.Context, conn net.Conn) {
+	defer s.logger.Infof("handle service %s stopped", conn.RemoteAddr())
+
+	connReader := ctxio.NewContextReader(ctx, conn)
+	defer connReader.Free()
+
 	for {
 		var command uint8
-		if err := binary.Read(conn, binary.BigEndian, &command); err != nil {
-			errs <- err
-			break
+		if err := binary.Read(connReader, binary.BigEndian, &command); err != nil {
+			s.logger.Errorf("handle service can not read command: %s", err)
+			return
 		}
 
 		var err error
 		switch command {
 		case PingCommand:
 			s.logger.Debug("got ping command")
-			err = s.ping(conn)
+			err = s.ping(ctx, conn)
 		case ChangeOutCommand:
 			s.logger.Info("got change out command")
-			err = s.changeOut(conn)
+			err = s.changeOut(ctx, conn)
 		default:
 			s.logger.Warn("got unknown command")
-			err = s.unknown(conn)
+			err = s.unknown(ctx, conn)
 		}
 		if err != nil {
-			errs <- err
-			break
+			s.logger.Errorf("handle service command err: %s", err)
+			return
 		}
 	}
 }
 
-func (s *ServiceServer) ping(conn net.Conn) error {
+func (s *ServiceServer) ping(ctx context.Context, conn net.Conn) error {
+	connWriter := ctxio.NewContextWriter(ctx, conn)
+	defer connWriter.Free()
+
 	if s.runtime.IsRunning() {
 		oldestOutput, err := s.runtime.GetOldestOutput()
 		if err != nil {
 			s.logger.Errorf("service: can not get oldest output: %s", err)
-			return binary.Write(conn, binary.BigEndian, FailResponse)
+			return binary.Write(connWriter, binary.BigEndian, FailResponse)
 		}
 
-		if err := binary.Write(conn, binary.BigEndian, OKResponse); err != nil {
+		if err := binary.Write(connWriter, binary.BigEndian, OKResponse); err != nil {
 			return err
 		}
 
 		telemetry := runtimeTelemetry{
 			OldestOutput: oldestOutput,
 		}
-		return binary.Write(conn, binary.BigEndian, telemetry)
+		return binary.Write(connWriter, binary.BigEndian, telemetry)
 	}
 
-	return binary.Write(conn, binary.BigEndian, FailResponse)
+	return binary.Write(connWriter, binary.BigEndian, FailResponse)
 }
 
-func (s *ServiceServer) changeOut(conn net.Conn) error {
+func (s *ServiceServer) changeOut(ctx context.Context, conn net.Conn) error {
+	connWriter := ctxio.NewContextWriter(ctx, conn)
+	defer connWriter.Free()
+
+	connReader := ctxio.NewContextReader(ctx, conn)
+	defer connReader.Free()
+
 	req := &changeOutRequest{}
-	if err := binary.Read(conn, binary.BigEndian, req); err != nil {
+	if err := binary.Read(connReader, binary.BigEndian, req); err != nil {
 		return err
 	}
 
@@ -196,10 +195,10 @@ func (s *ServiceServer) changeOut(conn net.Conn) error {
 	newAddr := buildAddress(req.NewIP, req.NewPort)
 	if err := s.runtime.ChangeOut(oldAddr, newAddr); err != nil {
 		s.logger.Errorf("can not change out: %s", err)
-		return binary.Write(conn, binary.BigEndian, FailResponse)
+		return binary.Write(connWriter, binary.BigEndian, FailResponse)
 	}
 
-	return binary.Write(conn, binary.BigEndian, OKResponse)
+	return binary.Write(connWriter, binary.BigEndian, OKResponse)
 }
 
 func buildAddress(ipNum uint32, portNum uint16) string {
@@ -211,6 +210,9 @@ func buildAddress(ipNum uint32, portNum uint16) string {
 	return ip.String() + ":" + port
 }
 
-func (s *ServiceServer) unknown(conn net.Conn) error {
-	return binary.Write(conn, binary.BigEndian, UnknownCommandResponse)
+func (s *ServiceServer) unknown(ctx context.Context, conn net.Conn) error {
+	connWriter := ctxio.NewContextWriter(ctx, conn)
+	defer connWriter.Free()
+
+	return binary.Write(connWriter, binary.BigEndian, UnknownCommandResponse)
 }

@@ -5,11 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"strconv"
 
 	"github.com/GDVFox/ctxio"
-	"github.com/GDVFox/gostreaming/runtime/external"
 	"github.com/GDVFox/gostreaming/util"
+	"github.com/GDVFox/gostreaming/util/connutil"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -23,12 +22,6 @@ type downstreamAck struct {
 	DownstreamIndex uint16
 }
 
-// DownstreamForwarderConfig набор настроек для DownstreamForwarder.
-type DownstreamForwarderConfig struct {
-	MessagesBufferSize int
-	TCPConfig          *external.TCPConnectionConfig
-}
-
 // DownstreamForwarder клиент для передачи сообщений далее по пайплайну.
 type DownstreamForwarder struct {
 	writeCtx context.Context
@@ -39,17 +32,15 @@ type DownstreamForwarder struct {
 	downstreamIndex uint16
 	name            string
 	addr            string
-	tcpConfig       *external.TCPConnectionConfig
 	logger          *util.Logger
 }
 
 // NewDownstreamForwarder создает новый объект DownstreamForwarder.
-func NewDownstreamForwarder(downstreamIndex uint16, name string, addr string, iter *LogBufferIterator, cfg *DownstreamForwarderConfig, l *util.Logger) *DownstreamForwarder {
+func NewDownstreamForwarder(downstreamIndex uint16, name string, addr string, iter *LogBufferIterator, l *util.Logger) *DownstreamForwarder {
 	return &DownstreamForwarder{
 		downstreamIndex: downstreamIndex,
 		name:            name,
 		addr:            addr,
-		tcpConfig:       cfg.TCPConfig,
 
 		iter:   iter,
 		acks:   make(chan *downstreamAck),
@@ -62,18 +53,12 @@ func (f *DownstreamForwarder) Run(ctx context.Context) error {
 	defer f.logger.Info("downstream forwarder stopped")
 	defer close(f.acks)
 
-	conn, err := net.DialTimeout("tcp", f.addr, f.tcpConfig.DialTimeout)
+	conn, err := net.Dial("tcp", f.addr)
 	if err != nil {
 		return fmt.Errorf("can not dial tcp: %w", err)
 	}
 	defer conn.Close()
-
-	if tcp, ok := conn.(*net.TCPConn); ok {
-		if err := tcp.SetNoDelay(f.tcpConfig.NoDelay); err != nil {
-			return fmt.Errorf("can not apply no delay parameter: %s: %w", strconv.FormatBool(f.tcpConfig.NoDelay), err)
-		}
-	}
-	tcpConn := external.NewTCPConnection(conn, f.tcpConfig)
+	tcpConn := connutil.NewDefaultConnection(conn)
 
 	if err := f.sayHello(ctx, tcpConn); err != nil {
 		return fmt.Errorf("can not say hello: %w", err)
@@ -91,8 +76,8 @@ func (f *DownstreamForwarder) Run(ctx context.Context) error {
 	return wg.Wait()
 }
 
-func (f *DownstreamForwarder) sayHello(ctx context.Context, tcpConn *external.TCPConnection) error {
-	connWriter := ctxio.NewContextWriter(ctx, tcpConn)
+func (f *DownstreamForwarder) sayHello(ctx context.Context, conn *connutil.Connection) error {
+	connWriter := ctxio.NewContextWriter(ctx, conn)
 	defer connWriter.Free()
 
 	hello := &helloMessage{}
@@ -105,7 +90,7 @@ func (f *DownstreamForwarder) sayHello(ctx context.Context, tcpConn *external.TC
 	return nil
 }
 
-func (f *DownstreamForwarder) receivingLoop(ctx context.Context, conn *external.TCPConnection) error {
+func (f *DownstreamForwarder) receivingLoop(ctx context.Context, conn *connutil.Connection) error {
 	defer f.logger.Info("receiving loop done")
 
 	connReader := ctxio.NewContextReader(ctx, conn)
@@ -125,7 +110,7 @@ func (f *DownstreamForwarder) receivingLoop(ctx context.Context, conn *external.
 	}
 }
 
-func (f *DownstreamForwarder) transmitingLoop(ctx context.Context, conn *external.TCPConnection) error {
+func (f *DownstreamForwarder) transmitingLoop(ctx context.Context, conn *connutil.Connection) error {
 	defer f.logger.Info("transmiting loop done")
 
 	connWriter := ctxio.NewContextWriter(ctx, conn)

@@ -26,11 +26,8 @@ type PlanWatcherConfig struct {
 	// PingFrequency время между запросами к машинам для получения
 	// информации о состоянии машин и запущенных на них рантаймов.
 	PingFrequency util.Duration `yaml:"ping-freq"`
-	// RetryDelay задержка между попытками применения запросов
-	// на восстановление узла, количество попыток не указывается,
-	// так как watcher отправляет запросы бесконечно, пока узел
-	// не восстановится, либо не прекратится работа watcher.
-	RetryDelay util.Duration `yaml:"retry-delay"`
+	// Retry конфигурация попток взаимодействия с узлом.
+	Retry *util.RetryConfig `yaml:"retry"`
 	// MachineWatcher набор настроек для watcher, который
 	// следит за состоянием машин.
 	MachineWatcher *MachineWatcherConfig `yaml:"machine-watcher"`
@@ -40,7 +37,7 @@ type PlanWatcherConfig struct {
 func NewPlanWatcherConfig() *PlanWatcherConfig {
 	return &PlanWatcherConfig{
 		PingFrequency:  util.Duration(5 * time.Second),
-		RetryDelay:     util.Duration(5 * time.Second),
+		Retry:          util.NewRetryConfig(),
 		MachineWatcher: NewMachineWatcherConfig(),
 	}
 }
@@ -90,7 +87,7 @@ func (w *PlanWatcher) RunPlan(p *planner.Plan) error {
 
 	planConfig := &PlanConfig{
 		PingFrequency: w.cfg.PingFrequency,
-		RetryDelay:    w.cfg.RetryDelay,
+		Retry:         w.cfg.Retry,
 	}
 	plan := NewPlan(p, w.machineWatcher, w.logger, planConfig)
 	if err := plan.StartNodes(w.ctx); err != nil {
