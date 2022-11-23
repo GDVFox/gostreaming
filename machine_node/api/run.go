@@ -38,6 +38,7 @@ func RunAction(r *http.Request) (*httplib.Response, error) {
 		Out:              req.Out,
 		RuntimePath:      config.Conf.RuntimePath,
 		RuntimeLogsDir:   config.Conf.RuntimeLogsDir,
+		RuntimeLogsLevel: config.Conf.RuntimeLogsLevel,
 		ActionStartRetry: config.Conf.ActionStartRetry,
 		ActionOptions: &watcher.ActionOptions{
 			Args: req.Args,

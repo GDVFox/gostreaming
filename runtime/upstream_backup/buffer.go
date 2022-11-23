@@ -101,10 +101,16 @@ func (b *logBuffer) TrimFirst() error {
 }
 
 func (b *logBuffer) Size() int64 {
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
 	return atomic.LoadInt64(&b.size)
 }
 
 func (b *logBuffer) NewIterator() *LogBufferIterator {
+	b.lock.Lock()
+	defer b.lock.Unlock()
+
 	return NewLogBufferIterator(b)
 }
 

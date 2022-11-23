@@ -75,32 +75,23 @@ func main() {
 	}
 	receiver := upstreambackup.NewDefaultReceiver(":"+strconv.Itoa(config.Conf.Port), config.Conf.In, receiverConfig, logger)
 
-	var forwarder upstreambackup.Forwarder
-	if len(config.Conf.Out) == 0 {
-		forwarderConfig := &upstreambackup.FakeForwarderConfig{
-			ACKPeriod: 5 * time.Second,
-		}
-		forwarder = upstreambackup.NewFakeForwarder(forwarderConfig, logger)
-	} else {
-		forwarderConfig := &upstreambackup.DefaultForwarderConfig{
-			ACKPeriod:     5 * time.Second,
-			ForwardLogDir: "/tmp/gostreaming-logs",
-			DownstreamConfig: &upstreambackup.DownstreamForwarderConfig{
-				MessagesBufferSize: 100,
-				TCPConfig:          outConfig,
-			},
-		}
-		forwarder, err = upstreambackup.NewDefaultForwarder(config.Conf.Name, config.Conf.Out, forwarderConfig, logger)
-		if err != nil {
-			logger.Errorf("can not init forwarder: %v", err)
-			fmt.Fprintf(os.Stderr, "can not init forwarder: %v\n", err)
-			os.Exit(1)
-		}
+	forwarderConfig := &upstreambackup.DefaultForwarderConfig{
+		ACKPeriod:     5 * time.Second,
+		ForwardLogDir: "/tmp/gostreaming-logs",
+		DownstreamConfig: &upstreambackup.DownstreamForwarderConfig{
+			MessagesBufferSize: 100,
+			TCPConfig:          outConfig,
+		},
+	}
+	forwarder, err := upstreambackup.NewDefaultForwarder(config.Conf.Name, config.Conf.Out, forwarderConfig, logger)
+	if err != nil {
+		logger.Errorf("can not init forwarder: %v", err)
+		fmt.Fprintf(os.Stderr, "can not init forwarder: %v\n", err)
+		os.Exit(1)
 	}
 
 	isSource := len(config.Conf.In) == 0
-	isSink := len(config.Conf.Out) == 0
-	runtime := NewRuntime(config.Conf.ActionPath, isSource, isSink, receiver, forwarder, config.Conf.ActionOptions, logger)
+	runtime := NewRuntime(config.Conf.ActionPath, isSource, receiver, forwarder, config.Conf.ActionOptions, logger)
 	serviceServer := NewServiceServer(config.Conf.ServiceSock, runtime, logger)
 
 	wg, runCtx := errgroup.WithContext(ctx)

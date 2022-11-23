@@ -22,10 +22,9 @@ type Runtime struct {
 	path      string
 	isRunning uint32
 	isSource  bool
-	isSink    bool
 
 	receiver  *upstreambackup.DefaultReceiver
-	forwarder upstreambackup.Forwarder
+	forwarder *upstreambackup.DefaultForwarder
 	opt       *config.ActionOptions
 
 	messagesQueue chan *upstreambackup.UpstreamMessage
@@ -33,11 +32,10 @@ type Runtime struct {
 }
 
 // NewRuntime создает новый объект Runtime.
-func NewRuntime(path string, isSource, isSink bool, in *upstreambackup.DefaultReceiver, out upstreambackup.Forwarder, opt *config.ActionOptions, l *util.Logger) *Runtime {
+func NewRuntime(path string, isSource bool, in *upstreambackup.DefaultReceiver, out *upstreambackup.DefaultForwarder, opt *config.ActionOptions, l *util.Logger) *Runtime {
 	return &Runtime{
 		path:          path,
 		isSource:      isSource,
-		isSink:        isSink,
 		isRunning:     0,
 		receiver:      in,
 		forwarder:     out,
@@ -220,28 +218,13 @@ func (r *Runtime) handleOut(ctx context.Context, cmdOut io.Reader) error {
 		}
 		r.logger.Debugf("got output data from action with length %d", messsageLength)
 
-		if r.isSink {
-			if _, err := io.CopyN(io.Discard, cmdOut, int64(messsageLength)); err != nil {
-				return fmt.Errorf("can not discard cmd out of sink: %w", err)
-			}
+		data := make([]byte, messsageLength)
+		if err := binary.Read(cmdOut, binary.BigEndian, data); err != nil {
+			return fmt.Errorf("can not read message data: %w", err)
+		}
 
-			if err := r.forwarder.Forward(inputMsg.InputID, inputMsg.Header.MessageID, nil); err != nil {
-				return fmt.Errorf("can not forward fake message: %w", err)
-			}
-		} else {
-			// Таким образом действие дает понять, что сообщение пропускается.
-			if messsageLength == 0 {
-				continue
-			}
-
-			data := make([]byte, messsageLength)
-			if err := binary.Read(cmdOut, binary.BigEndian, data); err != nil {
-				return fmt.Errorf("can not read message data: %w", err)
-			}
-
-			if err := r.forwarder.Forward(inputMsg.InputID, inputMsg.Header.MessageID, data); err != nil {
-				return fmt.Errorf("can not forward message: %w", err)
-			}
+		if err := r.forwarder.Forward(inputMsg.InputID, inputMsg.Header.MessageID, data); err != nil {
+			return fmt.Errorf("can not forward message: %w", err)
 		}
 	}
 }

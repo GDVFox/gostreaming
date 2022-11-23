@@ -54,8 +54,10 @@ type DefaultForwarder struct {
 	messageIndex uint32
 	name         string
 
-	forwardLog    *ForwardLog
-	emptyInputMax map[uint16]uint32
+	forwardLog *ForwardLog
+
+	inputMaxMutex sync.Mutex
+	inputMax      map[uint16]uint32
 
 	ctx          context.Context
 	downstreamWG sync.WaitGroup
@@ -92,6 +94,7 @@ func NewDefaultForwarder(name string, outs []string, cfg *DefaultForwarderConfig
 		messageIndex:       0,
 		name:               name,
 		forwardLog:         forwardLog,
+		inputMax:           make(map[uint16]uint32),
 		downstreamsAcks:    make(map[uint16]uint32),
 		downstreamsInWork:  make(map[uint16]*workingDownstream),
 		downstreamsIndexes: downstreamsIndexes,
@@ -212,21 +215,34 @@ func (f *DefaultForwarder) Forward(inputID uint16, inputMsgID uint32, data []byt
 	// Всегда увеличиваем счетчик, пропуски в случае ошибок не должны ни на что влиять
 	defer func() { f.messageIndex++ }()
 
-	// if len(data) == 0 {
-	// 	inputMax, ok := f.emptyInputMax[inputID]
-	// 	if ok && inputMax >= inputMsgID {
-	// 		return fmt.Errorf("forwarder: got from %d message %d; current max is %d", inputID, inputMsgID, inputMax)
-	// 	}
+	if err := f.updateInputMax(inputID, inputMsgID); err != nil {
+		return fmt.Errorf("can not update max: %w", err)
+	}
 
-	// 	f.emptyInputMax[inputID] = inputMsgID
-	// 	f.logger.Debugf("forwarder: register message %d from input %d done", inputMsgID, inputID)
-	// }
+	// Если далее по схеме передавать сообщение некому,
+	// то и от логирования в буфер нет смысла.
+	// Кроме того по протоколу не передаются далее и пустые сообщения,
+	// они лишь служат маркером для перадачи подтверждений выше по потоку.
+	if len(f.downstreamsIndexes) == 0 || len(data) == 0 {
+		return nil
+	}
 
 	if err := f.forwardLog.Write(inputID, inputMsgID, f.messageIndex, data); err != nil {
-		f.logger.Errorf("write forward log failed for message %d (len %d): %s", f.messageIndex, len(data), err)
 		return fmt.Errorf("can not write forward log: %w", err)
 	}
 	f.logger.Debugf("forward message %d (len %d) done", f.messageIndex, len(data))
+	return nil
+}
+
+func (f *DefaultForwarder) updateInputMax(inputID uint16, inputMsgID uint32) error {
+	f.inputMaxMutex.Lock()
+	defer f.inputMaxMutex.Unlock()
+
+	currentMax, ok := f.inputMax[inputID]
+	if ok && currentMax > inputMsgID { // случай равенства возможет для источника, так как там все 0.
+		return fmt.Errorf("got from %d message %d; current max is %d", inputID, inputMsgID, currentMax)
+	}
+	f.inputMax[inputID] = inputMsgID
 	return nil
 }
 
@@ -258,7 +274,6 @@ func (f *DefaultForwarder) handleAcks(ctx context.Context, acks chan *downstream
 			}
 			f.downstreamsAcks[ack.DownstreamIndex] = uint32(ack.ackMessage)
 			f.downstreamsAcksLock.Unlock()
-
 		}
 	}
 }
@@ -271,23 +286,33 @@ func (f *DefaultForwarder) trimLoop(ctx context.Context) error {
 		case <-f.ackTicker.C:
 			f.logger.Debugf("starting trim forward log")
 
-			inputMaxs, minAck, err := f.trimForwardLog()
-			if err != nil {
-				return fmt.Errorf("can not trim forward log: %w", err)
+			var inputMax UpstreamAck
+			if f.forwardLog.buffer.Size() == 0 {
+				f.inputMaxMutex.Lock()
+				inputMax = f.inputMax
+				f.inputMax = make(map[uint16]uint32)
+				f.inputMaxMutex.Unlock()
+			} else {
+				var minAck uint32
+				var err error
+
+				inputMax, minAck, err = f.trimForwardLog()
+				if err != nil {
+					return fmt.Errorf("can not trim forward log: %w", err)
+				}
+				f.logger.Debugf("trim forward log to %d done", minAck)
 			}
 
-			if len(inputMaxs) == 0 {
+			if len(inputMax) == 0 {
 				f.logger.Debugf("nothing to trim")
 				continue
 			}
-
-			f.logger.Debugf("trim forward log to %d done", minAck)
-			f.logger.Debugf("got upstreams for ACK: %s", inputMaxs)
+			f.logger.Debugf("got upstreams for ACK: %s", inputMax)
 
 			select {
 			case <-ctx.Done():
 				return nil
-			case f.upstreamAcks <- inputMaxs:
+			case f.upstreamAcks <- inputMax:
 			}
 		}
 	}
