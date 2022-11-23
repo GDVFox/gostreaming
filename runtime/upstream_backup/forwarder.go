@@ -56,7 +56,7 @@ type DefaultForwarder struct {
 	forwardLog *ForwardLog
 
 	inputMaxMutex sync.Mutex
-	inputMax      map[uint16]uint32
+	inputMax      UpstreamAck
 
 	ctx          context.Context
 	downstreamWG sync.WaitGroup
@@ -282,16 +282,16 @@ func (f *DefaultForwarder) trimLoop(ctx context.Context) error {
 		case <-f.ackTicker.C:
 			f.logger.Debugf("starting trim forward log")
 
-			var inputMax UpstreamAck
-			if f.forwardLog.buffer.Size() == 0 {
-				f.inputMaxMutex.Lock()
-				inputMax = f.inputMax
-				f.inputMax = make(map[uint16]uint32)
-				f.inputMaxMutex.Unlock()
-			} else {
+			f.inputMaxMutex.Lock()
+			inputMax := f.inputMax
+			f.inputMax = make(map[uint16]uint32)
+			f.inputMaxMutex.Unlock()
+
+			if f.forwardLog.buffer.Size() != 0 {
 				var minAck uint32
 				var err error
 
+				// inputMax переприсваиваем input_max
 				inputMax, minAck, err = f.trimForwardLog()
 				if err != nil {
 					return fmt.Errorf("can not trim forward log: %w", err)

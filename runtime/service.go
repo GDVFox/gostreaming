@@ -104,7 +104,7 @@ func (s *ServiceServer) Run(ctx context.Context) error {
 				conn.Close()
 				conn = nil
 
-				s.logger.Info("previous connection closed for %s", conn.RemoteAddr())
+				s.logger.Info("previous connection closed for %s", newConn.RemoteAddr())
 			}
 			conn = newConn
 
