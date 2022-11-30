@@ -30,7 +30,7 @@ func GetDashboard(r *http.Request) (*httplib.Response, error) {
 
 	data := map[string]interface{}{
 		"Name":   schemeName,
-		"Host":   config.Conf.HTTP.Host,
+		"Host":   config.Conf.HTTP.DashboardIP,
 		"Port":   config.Conf.HTTP.Port,
 		"Period": sendPeriodStr,
 	}
@@ -44,31 +44,30 @@ func GetDashboard(r *http.Request) (*httplib.Response, error) {
 }
 
 var (
-	templateString = `
-<!doctype html>
-	<html>
-	<head>
-	  <meta charset="utf-8">
-	  <title>Dashboard: {{ .Name }}</title>
-	</head>
-	<body>
-	  <h1>Dashboard: {{ .Name }}</h1>
-	  <h2 id="error_msg" style="visibility: hidden"></h2>
-	  <img id="nodes_structure_img" src="">
-	</body>
-	<script>
-	  var graphSocket = new WebSocket("ws://{{ .Host }}:{{ .Port }}/v1/schemas/{{ .Name }}/send_dashboard?send_period={{ .Period }}");
-	  graphSocket.onmessage = function (event) {
-		var msg = JSON.parse(event.data);
-		if (msg["code"] != "image") {
-		  document.getElementById("nodes_structure_img").style.visibility = "hidden";
-		  document.getElementById("error_msg").innerHTML = msg["body"];
-		  document.getElementById("error_msg").style.visibility = "visible";
-		} else {
-		  document.getElementById("nodes_structure_img").src = "data:image/svg+xml;base64," + msg["body"];
-		}
-	  }
-	</script>
-	</html>
+	templateString = `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Dashboard: {{ .Name }}</title>
+</head>
+<body>
+  <h1>Dashboard: {{ .Name }}</h1>
+  <h2 id="error_msg" style="visibility: hidden"></h2>
+  <img id="nodes_structure_img" src="">
+</body>
+<script>
+  var graphSocket = new WebSocket("ws://{{ .Host }}:{{ .Port }}/v1/schemas/{{ .Name }}/send_dashboard?send_period={{ .Period }}");
+  graphSocket.onmessage = function (event) {
+	var msg = JSON.parse(event.data);
+	if (msg["code"] != "image") {
+	  document.getElementById("nodes_structure_img").style.visibility = "hidden";
+	  document.getElementById("error_msg").innerHTML = msg["body"];
+	  document.getElementById("error_msg").style.visibility = "visible";
+	} else {
+	  document.getElementById("nodes_structure_img").src = "data:image/svg+xml;base64," + msg["body"];
+	}
+  }
+</script>
+</html>
 `
 )

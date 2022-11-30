@@ -77,5 +77,5 @@ func main() {
 		logger.Info("got signal: ", sig)
 	}()
 
-	httplib.StartServer(r, config.Conf.HTTP, logger, stopChannel)
+	httplib.StartServer(r, config.Conf.HTTP.HTTPConfig, logger, stopChannel)
 }

@@ -12,7 +12,7 @@ var Conf = NewConfig()
 
 // Config конфигурация сервиса.
 type Config struct {
-	HTTP    *httplib.HTTPConfig        `yaml:"http"`
+	HTTP    *HTTPConfig                `yaml:"http"`
 	Logging *util.LoggingConfig        `yaml:"logging"`
 	ETCD    *storage.ETCDConfig        `yaml:"etcd"`
 	Watcher *watcher.PlanWatcherConfig `yaml:"watcher"`
@@ -21,9 +21,22 @@ type Config struct {
 // NewConfig создает конфиг с настройками по-умолчанию
 func NewConfig() *Config {
 	return &Config{
-		HTTP:    httplib.NewtHTTPConfig(),
+		HTTP:    newHTTPConfig(),
 		Logging: util.NewLoggingConfig(),
 		ETCD:    storage.NewETCDConfig(),
 		Watcher: watcher.NewPlanWatcherConfig(),
+	}
+}
+
+// HTTPConfig конфигурация HTTP сервера
+type HTTPConfig struct {
+	*httplib.HTTPConfig `yaml:",inline"`
+	DashboardIP         string `yaml:"dashboard_ip"`
+}
+
+func newHTTPConfig() *HTTPConfig {
+	return &HTTPConfig{
+		HTTPConfig:  httplib.NewtHTTPConfig(),
+		DashboardIP: "127.0.0.1",
 	}
 }
