@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"html/template"
 	"net/http"
-	"path"
 
 	"github.com/gorilla/mux"
 
@@ -14,7 +13,7 @@ import (
 )
 
 var (
-	dashboardTemplateName = "dashboard.tmpl"
+	dashboardTemplate = template.Must(template.New("dashboard").Parse(templateString))
 )
 
 // GetDashboard получает описание схемы.
@@ -27,11 +26,6 @@ func GetDashboard(r *http.Request) (*httplib.Response, error) {
 	sendPeriodStr := r.FormValue("send_period")
 	if sendPeriodStr == "" {
 		return httplib.NewBadRequestResponse(httplib.NewErrorBody(common.BadPeriodErrorCode, "send_period must be not empty")), nil
-	}
-
-	dashboardTemplate, err := template.ParseFiles(path.Join(config.Conf.StaticPath, dashboardTemplateName))
-	if err != nil {
-		return nil, err
 	}
 
 	data := map[string]interface{}{
@@ -48,3 +42,33 @@ func GetDashboard(r *http.Request) (*httplib.Response, error) {
 
 	return httplib.NewOKResponse(buf.Bytes(), httplib.ContentTypeHTML), nil
 }
+
+var (
+	templateString = `
+<!doctype html>
+	<html>
+	<head>
+	  <meta charset="utf-8">
+	  <title>Dashboard: {{ .Name }}</title>
+	</head>
+	<body>
+	  <h1>Dashboard: {{ .Name }}</h1>
+	  <h2 id="error_msg" style="visibility: hidden"></h2>
+	  <img id="nodes_structure_img" src="">
+	</body>
+	<script>
+	  var graphSocket = new WebSocket("ws://{{ .Host }}:{{ .Port }}/v1/schemas/{{ .Name }}/send_dashboard?send_period={{ .Period }}");
+	  graphSocket.onmessage = function (event) {
+		var msg = JSON.parse(event.data);
+		if (msg["code"] != "image") {
+		  document.getElementById("nodes_structure_img").style.visibility = "hidden";
+		  document.getElementById("error_msg").innerHTML = msg["body"];
+		  document.getElementById("error_msg").style.visibility = "visible";
+		} else {
+		  document.getElementById("nodes_structure_img").src = "data:image/svg+xml;base64," + msg["body"];
+		}
+	  }
+	</script>
+	</html>
+`
+)
