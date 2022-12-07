@@ -3,29 +3,29 @@ nodes:
     - name: numgen
       action: num_gen
       addresses:
-        - host: 127.0.0.1
-          port: 9191
+        - host: machine_node_1
+          port: 9090
       args:
         - --freq=1000
     - name: filter2
       action: filter
       addresses:
-        - host: 127.0.0.1
-          port: 9292
+        - host: machine_node_1
+          port: 9091
       args:
         - --mod=2
     - name: filter3
       action: filter
       addresses:
-        - host: 127.0.0.1
-          port: 9393
+        - host: machine_node_2
+          port: 9090
       args:
         - --mod=3
     - name: printer2
       action: printer
       addresses:
-        - host: 127.0.0.1
-          port: 9494
+        - host: machine_node_3
+          port: 9090
       args:
         - --port=12012
       env:
@@ -33,8 +33,8 @@ nodes:
     - name: printer6
       action: printer
       addresses:
-        - host: 127.0.0.1
-          port: 9595
+        - host: machine_node_2
+          port: 9091
       args:
         - --port=16016
       env:

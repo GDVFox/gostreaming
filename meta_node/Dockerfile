@@ -1,4 +1,4 @@
-FROM golang:1.16.4-alpine3.13
+FROM golang:1.18.8-alpine3.15
 
 # The latest alpine images don't have some tools like (`git` and `bash`).
 # Adding git, bash and openssh to the image
@@ -18,7 +18,5 @@ COPY meta_node ./meta_node
 #create binary
 RUN go build -o ./bin/meta_node ./meta_node/*.go
 RUN chmod +x ./bin/meta_node
-
-EXPOSE 8888
 
 CMD ["/bin/sh"]

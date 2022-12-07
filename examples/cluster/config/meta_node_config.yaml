@@ -3,11 +3,11 @@ http:
   port: 5555
 
 logging:
-  logfile: /var/log/meta_node/meta_node.log
-  level: info
+  logfile: stdout
+  level: debug
 
 etcd:
-  endpoints: ['127.0.0.1:2379']
+  endpoints: ['etcd0:2379']
   timeout: 1m
   retry:
     delay: 1s
@@ -18,7 +18,13 @@ watcher:
   retry-delay: 1s
   machine-watcher:
     machines:
-      - host: "127.0.0.1"
+      - host: "machine_node_1"
+        port: 8181
+        timeout: 30s
+      - host: "machine_node_2"
+        port: 8181
+        timeout: 30s
+      - host: "machine_node_3"
         port: 8181
         timeout: 30s
 

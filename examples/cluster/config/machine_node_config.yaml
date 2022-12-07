@@ -3,11 +3,11 @@ http:
   port: 8181
 
 logging:
-  logfile: /var/log/machine_node/machine_node.log
-  level: info
+  logfile: stdout
+  level: debug
 
 etcd:
-  endpoints: ['127.0.0.1:2379']
+  endpoints: ['etcd0:2379']
   timeout: 1m
   retry:
     delay: 1s

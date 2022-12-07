@@ -1,4 +1,4 @@
-FROM golang:1.16.4-alpine3.13
+FROM golang:1.18.8-alpine3.15
 
 # The latest alpine images don't have some tools like (`git` and `bash`).
 # Adding git, bash and openssh to the image
@@ -20,7 +20,5 @@ COPY runtime ./runtime
 RUN go build -o ./bin/runtime ./runtime/*.go
 RUN go build -o ./bin/machine_node ./machine_node/*.go
 RUN chmod +x ./bin/machine_node
-
-EXPOSE 7171
 
 CMD ["/bin/sh"]
