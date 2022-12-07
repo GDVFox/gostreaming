@@ -1,0 +1,6 @@
+[book]
+authors = ["Daniil Gavrilovsky"]
+language = "ru"
+multilingual = false
+title = "GoStreaming"
+src = "src"
