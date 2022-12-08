@@ -1,5 +1,7 @@
 # GoStreaming
 
-System for processing streams of data.
+Система обработки потоков данных.
 
-Documentation: https://gdvfox.github.io/base_description.html
+Примеры использования можно найти [тут](./examples/).
+
+Документация: https://gdvfox.github.io/base_description.html

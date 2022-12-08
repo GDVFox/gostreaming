@@ -1,0 +1,29 @@
+http:
+  host: 0.0.0.0
+  port: 8181
+
+logging:
+  logfile: stdout
+  level: debug
+
+etcd:
+  endpoints: ['etcd0:2379']
+  timeout: 1m
+  retry:
+    delay: 1s
+    count: 10
+
+watcher:
+  pings-to-stop: 3
+  ping-freq: 3s
+
+runtime:
+  binary-path: /gostreaming/bin/runtime
+  logs-dir: /var/log/runtime
+  logs-level: info
+  timeout: 5s
+  ack-period: 5s
+  forward-log-dir: /tmp/gostreaming-log
+  action-start-retry:
+    delay: 1s
+    count: 10

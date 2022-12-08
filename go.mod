@@ -16,8 +16,12 @@ require (
 
 require (
 	github.com/GDVFox/ctxio v0.0.0-20210518102935-c4e9c3452111
+	github.com/TinkoffCreditSystems/invest-openapi-go-sdk v0.6.1
 	github.com/goccy/go-graphviz v0.0.9
 	github.com/gorilla/websocket v1.5.0
+	github.com/jmoiron/sqlx v1.3.5
+	github.com/kelseyhightower/envconfig v1.4.0
+	github.com/mailru/go-clickhouse v1.8.0
 	github.com/pterm/pterm v0.12.50
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.8.0

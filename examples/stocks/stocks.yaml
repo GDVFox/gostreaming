@@ -1,0 +1,31 @@
+name: stocks
+nodes:
+    - name: stocksgen
+      action: stocks-gen
+      addresses:
+        - host: machine_node_1
+          port: 9090
+        - host: machine_node_2
+          port: 9090
+      env:
+        STOCKSGEN_TOKEN: <token here>
+    - name: stocksportfolio
+      action: stocks-portfolio
+      addresses:
+        - host: machine_node_2
+          port: 9091
+        - host: machine_node_3
+          port: 9091
+      env:
+        STOCKSPORTFOLIO_TOKEN: <token here>
+    - name: stocksdb
+      action: stocks-db
+      addresses:
+        - host: machine_node_3
+          port: 9092
+        - host: machine_node_1
+          port: 9092
+      env:
+        STOCKSUPDATE_CLICKHOUSE: http://clickhouse:8123/stocks
+        STOCKSUPDATE_TOKEN: <token here>
+dataflow: stocksgen ; stocksportfolio ; stocksdb
