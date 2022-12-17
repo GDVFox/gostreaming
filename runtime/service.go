@@ -8,7 +8,6 @@ import (
 	"io"
 	"net"
 	"os"
-	"strconv"
 	"sync"
 
 	"github.com/GDVFox/ctxio"
@@ -31,13 +30,6 @@ const (
 	// UnknownCommandResponse полученная неизвестная команда.
 	UnknownCommandResponse uint8 = 0x2
 )
-
-type changeOutRequest struct {
-	OldIP   uint32
-	NewIP   uint32
-	OldPort uint16
-	NewPort uint16
-}
 
 type runtimeTelemetry struct {
 	OldestOutput uint32
@@ -186,13 +178,16 @@ func (s *ServiceServer) changeOut(ctx context.Context, conn net.Conn) error {
 	connReader := ctxio.NewContextReader(ctx, conn)
 	defer connReader.Free()
 
-	req := &changeOutRequest{}
-	if err := binary.Read(connReader, binary.BigEndian, req); err != nil {
+	oldAddr, err := s.readChangeOutAddr(connReader)
+	if err != nil {
+		return err
+	}
+	newAddr, err := s.readChangeOutAddr(connReader)
+	if err != nil {
 		return err
 	}
 
-	oldAddr := buildAddress(req.OldIP, req.OldPort)
-	newAddr := buildAddress(req.NewIP, req.NewPort)
+	s.logger.Errorf("OLOLO: %s %s", oldAddr, newAddr)
 	if err := s.runtime.ChangeOut(oldAddr, newAddr); err != nil {
 		s.logger.Errorf("can not change out: %s", err)
 		return binary.Write(connWriter, binary.BigEndian, FailResponse)
@@ -201,13 +196,18 @@ func (s *ServiceServer) changeOut(ctx context.Context, conn net.Conn) error {
 	return binary.Write(connWriter, binary.BigEndian, OKResponse)
 }
 
-func buildAddress(ipNum uint32, portNum uint16) string {
-	ipByte := make([]byte, 4)
-	binary.BigEndian.PutUint32(ipByte, ipNum)
-	ip := net.IP(ipByte)
+func (s *ServiceServer) readChangeOutAddr(r io.Reader) (string, error) {
+	var addrLen uint64
+	if err := binary.Read(r, binary.BigEndian, &addrLen); err != nil {
+		return "", fmt.Errorf("can not read change out addr len: %s", err)
+	}
 
-	port := strconv.FormatUint(uint64(portNum), 10)
-	return ip.String() + ":" + port
+	rawAddr := make([]byte, addrLen)
+	if err := binary.Read(r, binary.BigEndian, rawAddr); err != nil {
+		return "", fmt.Errorf("can not read change out addr: %s", err)
+	}
+
+	return string(rawAddr), nil
 }
 
 func (s *ServiceServer) unknown(ctx context.Context, conn net.Conn) error {

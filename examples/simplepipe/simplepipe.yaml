@@ -5,6 +5,8 @@ nodes:
       addresses:
         - host: machine_node_1
           port: 9090
+        - host: machine_node_2
+          port: 9090
       args:
         - --freq=1000
     - name: filter2
@@ -12,20 +14,26 @@ nodes:
       addresses:
         - host: machine_node_1
           port: 9091
+        - host: machine_node_2
+          port: 9091
       args:
         - --mod=2
     - name: filter3
       action: filter
       addresses:
         - host: machine_node_2
-          port: 9090
+          port: 9092
+        - host: machine_node_3
+          port: 9092
       args:
         - --mod=3
     - name: printer2
       action: printer
       addresses:
         - host: machine_node_3
-          port: 9090
+          port: 9093
+        - host: machine_node_1
+          port: 9093
       args:
         - --port=12012
       env:
@@ -34,7 +42,9 @@ nodes:
       action: printer
       addresses:
         - host: machine_node_2
-          port: 9091
+          port: 9094
+        - host: machine_node_1
+          port: 9094
       args:
         - --port=16016
       env:

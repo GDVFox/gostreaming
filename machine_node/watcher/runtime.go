@@ -44,13 +44,6 @@ var (
 	ErrBadOut        = errors.New("address must be in format <host>:<port>")
 )
 
-type changeOutRequest struct {
-	OldIP   uint32
-	NewIP   uint32
-	OldPort uint16
-	NewPort uint16
-}
-
 // RuntimeTelemetry информация о состоянии runtime.
 type RuntimeTelemetry struct {
 	OldestOutput uint32
@@ -264,28 +257,14 @@ func (r *Runtime) ChangeOut(oldOut, newOut string) error {
 	r.communicationMutex.Lock()
 	defer r.communicationMutex.Unlock()
 
-	oldIP, oldPort, err := r.parseAddr(oldOut)
-	if err != nil {
-		return fmt.Errorf("can not parse old out %s: %w", oldOut, err)
-	}
-
-	newIP, newPort, err := r.parseAddr(newOut)
-	if err != nil {
-		return fmt.Errorf("can not parse new out %s: %w", newOut, err)
-	}
-
 	if err := binary.Write(r.serviceConn, binary.BigEndian, ChangeOutCommand); err != nil {
 		return fmt.Errorf("can not send change out command: %w", err)
 	}
-
-	req := changeOutRequest{
-		OldIP:   oldIP,
-		OldPort: oldPort,
-		NewIP:   newIP,
-		NewPort: newPort,
+	if err := r.writeChangeOutAddr(oldOut); err != nil {
+		return fmt.Errorf("can not send change out old address: %w", err)
 	}
-	if err := binary.Write(r.serviceConn, binary.BigEndian, req); err != nil {
-		return fmt.Errorf("can not send change out request: %w", err)
+	if err := r.writeChangeOutAddr(newOut); err != nil {
+		return fmt.Errorf("can not send change out new address: %w", err)
 	}
 
 	var resp uint8
@@ -299,24 +278,14 @@ func (r *Runtime) ChangeOut(oldOut, newOut string) error {
 	return nil
 }
 
-func (r *Runtime) parseAddr(addr string) (uint32, uint16, error) {
-	addrParts := strings.Split(addr, ":")
-	if len(addrParts) != 2 {
-		return 0, 0, fmt.Errorf("can not split %s: %w", addr, ErrBadOut)
+func (r *Runtime) writeChangeOutAddr(addr string) error {
+	if err := binary.Write(r.serviceConn, binary.BigEndian, uint64(len(addr))); err != nil {
+		return fmt.Errorf("can not send change out length: %w", err)
 	}
-
-	ipPart := net.ParseIP(addrParts[0])
-	if ipPart == nil {
-		return 0, 0, fmt.Errorf("can not parse IP %s: %w", addrParts[0], ErrBadOut)
+	if err := binary.Write(r.serviceConn, binary.BigEndian, []byte(addr)); err != nil {
+		return fmt.Errorf("can not send change out addr: %w", err)
 	}
-	ipPart = ipPart.To4()
-
-	portPart, err := strconv.ParseUint(addrParts[1], 10, 16)
-	if err != nil {
-		return 0, 0, fmt.Errorf("can not parse PORT %s: %w", addrParts[0], ErrBadOut)
-	}
-
-	return binary.BigEndian.Uint32(ipPart), uint16(portPart), nil
+	return nil
 }
 
 // Stop завершает работу действия, возвращает ошибку из stderr.
