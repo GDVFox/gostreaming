@@ -3,7 +3,8 @@ FROM golang:1.18.8-alpine3.15
 # The latest alpine images don't have some tools like (`git` and `bash`).
 # Adding git, bash and openssh to the image
 RUN apk update && apk upgrade && \
-    apk add --no-cache bash git openssh gcc musl-dev
+    apk add --no-cache bash git openssh gcc musl-dev && \
+    apk add iptables
 
 LABEL maintainer="Daniil Gavrilovsky"
 

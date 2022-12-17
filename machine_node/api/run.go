@@ -45,8 +45,9 @@ func RunAction(r *http.Request) (*httplib.Response, error) {
 		AckPeriod:        time.Duration(config.Conf.Runtime.AckPeriod),
 		ForwardLogDir:    config.Conf.Runtime.ForwardLogDir,
 		ActionOptions: &watcher.ActionOptions{
-			Args: req.Args,
-			Env:  req.Env,
+			Args:          req.Args,
+			Env:           req.Env,
+			ConnWhitelist: req.ConnWhitelist,
 		},
 	}
 	runtime := watcher.NewRuntime(req.SchemeName, req.ActionName, actionBytes, logger, opt)

@@ -96,14 +96,15 @@ func (m *Machine) SendRunAction(ctx context.Context, schemeName string, node *pl
 		Path:   runPath,
 	}
 	reqBody := &message.RunActionRequest{
-		SchemeName: schemeName,
-		ActionName: node.Name,
-		Action:     node.Action,
-		Port:       node.Port,
-		In:         node.In,
-		Out:        node.Out,
-		Args:       node.Args,
-		Env:        node.Env,
+		SchemeName:    schemeName,
+		ActionName:    node.Name,
+		Action:        node.Action,
+		Port:          node.Port,
+		In:            node.In,
+		Out:           node.Out,
+		Args:          node.Args,
+		Env:           node.Env,
+		ConnWhitelist: node.ConnWhitelist,
 	}
 	return m.sendCommand(machineURL.String(), reqBody)
 }

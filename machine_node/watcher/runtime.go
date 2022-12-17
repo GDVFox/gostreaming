@@ -51,8 +51,9 @@ type RuntimeTelemetry struct {
 
 // ActionOptions опции для запуска действия
 type ActionOptions struct {
-	Args []string          `json:"args"`
-	Env  map[string]string `json:"env"`
+	Args          []string          `json:"args"`
+	Env           map[string]string `json:"env"`
+	ConnWhitelist []string          `json:"conn_whitelist"`
 }
 
 // RuntimeOptions набор параметров при запуске действия.
@@ -187,7 +188,7 @@ func (r *Runtime) createTmpBinary(name string, bin []byte) (string, error) {
 		return "", fmt.Errorf("can not writer bin: %w", err)
 	}
 
-	if err := os.Chmod(actionFile.Name(), 0700); err != nil {
+	if err := os.Chmod(actionFile.Name(), 0777); err != nil {
 		return "", fmt.Errorf("can not change file mod: %w", err)
 	}
 

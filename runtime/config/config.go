@@ -14,8 +14,9 @@ var Conf = &Config{}
 
 // ActionOptions опции для запуска действия
 type ActionOptions struct {
-	Args []string          `json:"args"`
-	Env  map[string]string `json:"env"`
+	Args          []string          `json:"args"`
+	Env           map[string]string `json:"env"`
+	ConnWhitelist []string          `json:"conn_whitelist"`
 }
 
 // EnvAsSlice возвращает Env в формате слайса строк вида "name=value".

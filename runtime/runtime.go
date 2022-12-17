@@ -9,7 +9,10 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"os/user"
+	"strconv"
 	"sync/atomic"
+	"syscall"
 
 	"golang.org/x/sync/errgroup"
 
@@ -17,6 +20,7 @@ import (
 	"github.com/GDVFox/gostreaming/runtime/config"
 	upstreambackup "github.com/GDVFox/gostreaming/runtime/upstream_backup"
 	"github.com/GDVFox/gostreaming/util"
+	"github.com/coreos/go-iptables/iptables"
 )
 
 // Runtime обертка над действием.
@@ -31,10 +35,17 @@ type Runtime struct {
 
 	messagesQueue chan *upstreambackup.UpstreamMessage
 	logger        *util.Logger
+
+	uniqName string
+	ipt      *iptables.IPTables
 }
 
 // NewRuntime создает новый объект Runtime.
-func NewRuntime(path string, isSource bool, in *upstreambackup.DefaultReceiver, out *upstreambackup.DefaultForwarder, opt *config.ActionOptions, l *util.Logger) *Runtime {
+func NewRuntime(path string, isSource bool, in *upstreambackup.DefaultReceiver, out *upstreambackup.DefaultForwarder, opt *config.ActionOptions, l *util.Logger) (*Runtime, error) {
+	ipt, err := iptables.New()
+	if err != nil {
+		return nil, err
+	}
 	return &Runtime{
 		path:          path,
 		isSource:      isSource,
@@ -44,7 +55,9 @@ func NewRuntime(path string, isSource bool, in *upstreambackup.DefaultReceiver, 
 		opt:           opt,
 		messagesQueue: make(chan *upstreambackup.UpstreamMessage, 1),
 		logger:        l.WithName("runtime"),
-	}
+		uniqName:      util.RandString(20),
+		ipt:           ipt,
+	}, nil
 }
 
 // Run запускает действие.
@@ -54,10 +67,38 @@ func (r *Runtime) Run(ctx context.Context) error {
 	cancelableCtx, runtimeCancel := context.WithCancel(ctx)
 	defer runtimeCancel()
 
+	if err := r.createUser(); err != nil {
+		return fmt.Errorf("can not create user: %w", err)
+	}
+	defer r.deleteUser()
+	r.logger.Infof("Created user %s", r.uniqName)
+
+	if err := r.createFirewall(); err != nil {
+		return fmt.Errorf("can not create firewall: %w", err)
+	}
+	defer r.removeFirewall()
+	r.logger.Infof("Created firewall for user: %s", r.uniqName)
+
+	runtimeUser, err := user.Lookup(r.uniqName)
+	if err != nil {
+		return fmt.Errorf("can not find runtime user: %w", err)
+	}
+
+	uid, err := strconv.ParseInt(runtimeUser.Uid, 10, 32)
+	if err != nil {
+		return fmt.Errorf("can not parse uid: %w", err)
+	}
+	gid, err := strconv.ParseInt(runtimeUser.Gid, 10, 32)
+	if err != nil {
+		return fmt.Errorf("can not parse gid: %w", err)
+	}
+
 	wg, runCtx := errgroup.WithContext(cancelableCtx)
 	runActionCommand := exec.CommandContext(runCtx, r.path, r.opt.Args...)
 	runActionCommand.Env = os.Environ()
 	runActionCommand.Env = append(runActionCommand.Env, r.opt.EnvAsSlice()...)
+	runActionCommand.SysProcAttr = &syscall.SysProcAttr{}
+	runActionCommand.SysProcAttr.Credential = &syscall.Credential{Uid: uint32(uid), Gid: uint32(gid)}
 
 	inCmd, err := runActionCommand.StdinPipe()
 	if err != nil {
@@ -114,7 +155,7 @@ func (r *Runtime) Run(ctx context.Context) error {
 		return fmt.Errorf("action io got error: %w", err)
 	}
 
-	r.logger.Info("io done, waitring command end")
+	r.logger.Info("io done, waiting command end")
 	if err := runActionCommand.Wait(); err != nil {
 		exitErr, ok := err.(*exec.ExitError)
 		if !ok {
@@ -142,6 +183,62 @@ func (r *Runtime) ChangeOut(oldOut, newOut string) error {
 // GetOldestOutput возвращает самый старый output_message_id, который хранится в логе.
 func (r *Runtime) GetOldestOutput() (uint32, error) {
 	return r.forwarder.GetOldestOutput()
+}
+
+func (r *Runtime) createUser() error {
+	cmd := exec.Command("adduser", "--no-create-home", "--disabled-password", r.uniqName)
+	_, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to create user: %w", err)
+	}
+	return nil
+}
+
+func (r *Runtime) deleteUser() error {
+	cmd := exec.Command("deluser", r.uniqName)
+	_, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("failed to delete user: %w", err)
+	}
+	return nil
+}
+
+func (r *Runtime) createFirewall() error {
+	if err := r.ipt.NewChain("filter", r.uniqName); err != nil {
+		return fmt.Errorf("failed to create iptables chain: %w", err)
+	}
+
+	if len(r.opt.ConnWhitelist) != 1 || r.opt.ConnWhitelist[0] != "all" {
+		for _, rawIp := range r.opt.ConnWhitelist {
+			if err := r.ipt.Append("filter", r.uniqName, "--dst", rawIp, "-m", "owner", "--uid-owner", r.uniqName, "-j", "ACCEPT"); err != nil {
+				return fmt.Errorf("failed to create drop rule: %w", err)
+			}
+		}
+
+		// Allow loopback by default
+		if err := r.ipt.Append("filter", r.uniqName, "--src", "127.0.0.1", "-m", "owner", "--uid-owner", r.uniqName, "-j", "ACCEPT"); err != nil {
+			return fmt.Errorf("failed to create drop rule: %w", err)
+		}
+
+		if err := r.ipt.Append("filter", r.uniqName, "-m", "owner", "--uid-owner", r.uniqName, "-j", "DROP"); err != nil {
+			return fmt.Errorf("failed to create drop rule: %w", err)
+		}
+	}
+
+	if err := r.ipt.Append("filter", "OUTPUT", "-j", r.uniqName); err != nil {
+		return fmt.Errorf("failed to append chain to output: %w", err)
+	}
+	return nil
+}
+
+func (r *Runtime) removeFirewall() error {
+	if err := r.ipt.Delete("filter", "OUTPUT", "-j", r.uniqName); err != nil {
+		return fmt.Errorf("failed to remove chain from output: %w", err)
+	}
+	if err := r.ipt.ClearAndDeleteChain("filter", r.uniqName); err != nil {
+		return fmt.Errorf("failed to clear and remove chain: %w", err)
+	}
+	return nil
 }
 
 // inCmd закроет handleIn, так как он писатель и может это делать по

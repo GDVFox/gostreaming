@@ -27,15 +27,16 @@ type Plan struct {
 
 // NodePlan описание узла, предназначенного для запуска на сервере.
 type NodePlan struct {
-	Name      string             `json:"name"`
-	Action    string             `json:"action"`
-	Host      string             `json:"host"`
-	Port      int                `json:"port"`
-	In        []string           `json:"in"`
-	Out       []string           `json:"out"`
-	Args      []string           `json:"args"`
-	Env       map[string]string  `json:"env"`
-	Addresses []*AddrDescription `json:"addresses"`
+	Name          string             `json:"name"`
+	Action        string             `json:"action"`
+	Host          string             `json:"host"`
+	Port          int                `json:"port"`
+	In            []string           `json:"in"`
+	Out           []string           `json:"out"`
+	Args          []string           `json:"args"`
+	Env           map[string]string  `json:"env"`
+	Addresses     []*AddrDescription `json:"addresses"`
+	ConnWhitelist []string           `json:"conn_whitelist"`
 }
 
 // node вершина в дереве связей узлов.
@@ -113,15 +114,16 @@ func (s *Planner) Plan() (*Plan, error) {
 				out[i] = s.nodes[n].Addresses[0].Host + ":" + strconv.Itoa(s.nodes[n].Addresses[0].Port)
 			}
 			orderedNodePlans = append(orderedNodePlans, &NodePlan{
-				Name:      nodeDescr.Name,
-				Action:    nodeDescr.Action,
-				Host:      nodeDescr.Addresses[0].Host,
-				Port:      nodeDescr.Addresses[0].Port,
-				In:        in,
-				Out:       out,
-				Args:      nodeDescr.Args,
-				Env:       nodeDescr.Env,
-				Addresses: nodeDescr.Addresses,
+				Name:          nodeDescr.Name,
+				Action:        nodeDescr.Action,
+				Host:          nodeDescr.Addresses[0].Host,
+				Port:          nodeDescr.Addresses[0].Port,
+				In:            in,
+				Out:           out,
+				Args:          nodeDescr.Args,
+				Env:           nodeDescr.Env,
+				Addresses:     nodeDescr.Addresses,
+				ConnWhitelist: nodeDescr.ConnWhitelist,
 			})
 			continue
 		}

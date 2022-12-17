@@ -21,6 +21,7 @@ var (
 	ErrNodeAddressUsed          = errors.New("address already used")
 	ErrEmptyArg                 = errors.New("arg can not be empty")
 	ErrEmptyEnvVarName          = errors.New("env variable name can not be empty")
+	ErrNotValidIP               = errors.New("expected valid ip")
 )
 
 var (
@@ -35,11 +36,12 @@ type AddrDescription struct {
 
 // NodeDescription описание узла.
 type NodeDescription struct {
-	Name      string             `yaml:"name" json:"name"`
-	Action    string             `yaml:"action" json:"action"`
-	Addresses []*AddrDescription `yaml:"addresses" json:"addresses"`
-	Args      []string           `yaml:"args" json:"args"`
-	Env       map[string]string  `yaml:"env" json:"env"`
+	Name          string             `yaml:"name" json:"name"`
+	Action        string             `yaml:"action" json:"action"`
+	Addresses     []*AddrDescription `yaml:"addresses" json:"addresses"`
+	Args          []string           `yaml:"args" json:"args"`
+	Env           map[string]string  `yaml:"env" json:"env"`
+	ConnWhitelist []string           `yaml:"conn_whitelist" json:"conn_whitelist"`
 }
 
 // Check выполняет проверку правильности описания узла.

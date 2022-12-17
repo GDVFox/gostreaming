@@ -9,6 +9,8 @@ nodes:
           port: 9090
       env:
         STOCKSGEN_TOKEN: <token here>
+      conn_whitelist:
+        - '178.248.239.55'
     - name: stocksportfolio
       action: stocks-portfolio
       addresses:
@@ -18,6 +20,8 @@ nodes:
           port: 9091
       env:
         STOCKSPORTFOLIO_TOKEN: <token here>
+      conn_whitelist:
+        - '178.248.239.55'
     - name: stocksdb
       action: stocks-db
       addresses:
@@ -28,4 +32,6 @@ nodes:
       env:
         STOCKSUPDATE_CLICKHOUSE: http://clickhouse:8123/stocks
         STOCKSUPDATE_TOKEN: <token here>
+      conn_whitelist:
+        - 'all'
 dataflow: stocksgen ; stocksportfolio ; stocksdb

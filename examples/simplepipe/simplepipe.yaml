@@ -49,4 +49,6 @@ nodes:
         - --port=16016
       env:
         SECRET_KEY: please
+      conn_whitelist:
+        - all
 dataflow: numgen ; filter2 ; (printer2 || (filter3 ; printer6))

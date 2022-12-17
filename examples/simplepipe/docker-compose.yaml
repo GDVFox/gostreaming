@@ -26,6 +26,8 @@ services:
             - '--config=/gostreaming/config/machine_node_config.yaml'
         volumes:
             - ./config:/gostreaming/config:ro
+        cap_add:
+            - NET_ADMIN
         depends_on:
             - etcd0
 
@@ -41,6 +43,8 @@ services:
             - '--config=/gostreaming/config/machine_node_config.yaml'
         volumes:
             - ./config:/gostreaming/config:ro
+        cap_add:
+            - NET_ADMIN
         depends_on:
             - etcd0
 
@@ -56,6 +60,8 @@ services:
             - '--config=/gostreaming/config/machine_node_config.yaml'
         volumes:
             - ./config:/gostreaming/config:ro
+        cap_add:
+            - NET_ADMIN
         depends_on:
             - etcd0
 

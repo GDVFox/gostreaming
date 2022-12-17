@@ -73,7 +73,12 @@ func main() {
 	}
 
 	isSource := len(config.Conf.In) == 0
-	runtime := NewRuntime(config.Conf.ActionPath, isSource, receiver, forwarder, config.Conf.ActionOptions, logger)
+	runtime, err := NewRuntime(config.Conf.ActionPath, isSource, receiver, forwarder, config.Conf.ActionOptions, logger)
+	if err != nil {
+		logger.Errorf("failed to create runtime: %v", err)
+		fmt.Fprintf(os.Stderr, "failed to create runtime: %v\n", err)
+		os.Exit(1)
+	}
 	serviceServer := NewServiceServer(config.Conf.ServiceSock, runtime, logger)
 
 	wg, runCtx := errgroup.WithContext(ctx)
